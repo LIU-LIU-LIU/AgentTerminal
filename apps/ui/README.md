@@ -21,7 +21,7 @@ pnpm --dir apps/ui desktop:dev
 
 ```text
 AgentTerminal/
-  agentterminal-ui.exe
+  AgentTerminal.exe
   runtime/
     node.exe
     dist/packages/runtime/src/index.js
