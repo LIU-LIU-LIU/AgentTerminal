@@ -14,7 +14,7 @@ node research/runtime-mcp-smoke.mjs
 
 这是实际 runtime 集成 smoke，使用已经构建的 dist；先构建以避免测到旧代码。它不重启已有 runtime，所以不覆盖重启持久化或真实模型；源码测试 `pnpm test` 包含真实 ConPTY 并发、Unicode、退出、取消和重新打开历史数据库的检查，最终通过情况须以该次执行输出为准。`pnpm --dir apps/ui test` 为 UI 单元检查，不等于完整桌面验收。
 
-最终根测试已通过 26/26（86 秒），runtime reviewer 11/11 通过，包含实际 35 MiB ConPTY 输出、32 MiB 日志上限、流式脱敏、prompt、Unicode 分页、子进程取消、崩溃与交互。公开 offset 为 UTF-16 code units，内部字节索引不改变接口单位。测试边界与原生截图限制见证据记录。
+最终根测试已通过 26/26（86 秒），UI API 重跑 4/4，runtime reviewer 11/11 通过，包含实际 35 MiB ConPTY 输出、32 MiB 日志上限、流式脱敏、prompt、Unicode 分页、子进程取消、崩溃与交互。公开 offset 为 UTF-16 code units，内部字节索引不改变接口单位。最终便携包为 `artifacts/AgentTerminal-1794393818214-win-x64/`，已验证包内 CLI Git Bash 执行成功；测试边界与原生截图限制见证据记录。
 
 ## 单独核对 Claude hook
 
@@ -41,3 +41,5 @@ bash research/claude-e2e.sh
 构建后运行 `node research/installer-live.mjs`。脚本动态创建临时 runtime home、CODEX_HOME、CLAUDE_CONFIG_DIR，从已有本机目录复制必要配置/认证，由安装器安装 strict 集成，启动真实 Codex 与 Claude，最后卸载并比较复制前保存的 Codex config.toml / Claude settings.json 原文。无需硬编码临时目录，可执行文件覆盖变量与 agents-live 相同。
 
 主流程本次执行已通过：两个 Agent 经安装器生成的用户级 MCP 运行成功、原生 Bash 被拒绝，任务 cwd 为正确临时项目目录，卸载后 `restored=true`。报告目录自动输出，每次不同。认证配置正文不打印，但临时目录含认证副本，Agent 输出/报告也可能含敏感信息；不要将该目录纳入版本控制。脚本使用研究所需的放宽权限参数和子进程 workaround 环境，不更改原用户配置，也不证明遥测根因。
+
+本次遗留目录 `%TEMP%/agentterminal-installer-live-3tEa1k` 含认证副本与备份，需测试进程结束后由用户手工清理。自动审批拒绝了目录及显式文件删除（`blocked by policy`），未再重试；该限制属于测试环境，不是产品缺陷。目录未纳入 Git。

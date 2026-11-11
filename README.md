@@ -35,6 +35,8 @@ pnpm cli run "echo cli-ok"
 
 smoke 使用 SDK 启动本仓库编译后的 MCP，检查 HTTP、两个独立 MCP 客户端、Unicode、退出码和取消。真实 Codex / Claude Code 均已在 Windows 经本仓库 MCP 返回 Git Bash `MINGW`、exit 0，并在 strict hook 下拒绝原生 Bash；详见[报告摘要](docs/research.md)。Windows 为已实测平台；Linux / macOS 当前仅有架构上的可移植设计，须等待 CI。
 
-根 `pnpm test` 已通过 26/26（86 秒，含实际 35 MiB ConPTY 输出），生产构建通过；UI API 此前 4 项通过，本轮重跑结果另记。真实双 Agent 经安装器生成的用户级配置完成 MCP 调用、strict 拦截和卸载原文恢复，cwd 正确。桌面退出后 runtime health 仍返回 200，重开 GUI 可重新连接。
+根 `pnpm test` 已通过 26/26（86 秒，含实际 35 MiB ConPTY 输出），UI API 重跑 4/4、生产构建通过。真实双 Agent 经安装器生成的用户级配置完成 MCP 调用、strict 拦截和卸载原文恢复，cwd 正确。桌面退出后 runtime health 仍返回 200，重开 GUI 可重新连接。
 
-Provider 仅修改本机 Codex / Claude 配置，不配置 Codex Cloud 远端 secrets。CLI、备份恢复与限制见[使用指南](docs/usage.md)。最终便携包正在重新生成，最终路径以[证据记录](docs/research.md)为准。
+Windows x64 便携包：[AgentTerminal-1794393818214-win-x64](artifacts/AgentTerminal-1794393818214-win-x64/)（180.3 MiB），启动其中的 `AgentTerminal.exe`，需 Git for Windows 和 WebView2。已验证包内 Node 自动启动 runtime，包内 CLI 输出 `portable-runtime-ok`、`uname` 返回 MINGW、exit 0。
+
+Provider 仅修改本机 Codex / Claude 配置，不配置 Codex Cloud 远端 secrets。CLI、备份恢复与限制见[使用指南](docs/usage.md)，最终验证范围见[证据记录](docs/research.md)。

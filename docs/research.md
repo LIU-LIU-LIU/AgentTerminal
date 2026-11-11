@@ -36,17 +36,20 @@ Windows hook 的关键经验：Codex 调用由 PowerShell 解析，绝对路径�
 
 此次使用一次性配置目录，未更改原用户 home；临时认证副本与研究报告仍可能含敏感内容，不应提交仓库。相关 CLI 噪声与插件同步警告不作为产品失败证据，也不复制进本页。研究脚本的权限放宽和 workaround 环境仅作用于本次子进程，不代表产品默认或精确 telemetry 根因。
 
-## 自动化验证与待补结果
+本次 `%TEMP%/agentterminal-installer-live-3tEa1k` 仍含测试复制的认证配置及安装器备份，未纳入 Git。自动审批以 `blocked by policy` 拒绝删除该临时目录，即使改为显式文件列表仍被拒绝；未继续重试。请在测试进程结束后手工核对并清理该目录（可在资源管理器地址栏输入上述路径）。这是本次测试环境的清理限制，不是产品运行问题。用户按实体 Escape 停止 GUI 自动化后未恢复操作。
 
-- 根 `pnpm test` 包含真实 ConPTY 并发、Unicode、非零退出、取消、历史持久化等测试；HTTP 与两个独立 MCP 客户端集成覆盖由主流程维护。这里不把测试“存在”等同于最终执行通过。
+## 最终验证与范围
+
+- 根 `pnpm test` 26/26 通过，覆盖真实 ConPTY 并发、Unicode、非零退出、取消、历史持久化，以及 HTTP 与两个独立 MCP 客户端集成。
 - 新增 `node research/runtime-mcp-smoke.mjs` 使用 SDK 启动 `dist/packages/mcp/src/index.js --agent research`，依赖已运行的 runtime 与相同 connection home，测试 HTTP / 双客户端 / Unicode / exit / cancel。运行方法见 [research/README.md](../research/README.md)。本次普通 Node 启动器下执行通过，详情如下。
 - 主流程已确认浏览器在临时 Codex home 的接入安装/卸载、监控中文终端日志和统计截图；UI API 4 项测试通过。另已读取终端 prompt，通过 POST input 输入后读到 `received:hello-ui`，确认输入到任务输出的交互链路。该 HTTP 验证不等同于桌面键盘输入或桌面视觉验收。
-- 主流程确认 Windows 桌面 release 编译成功，用时 1 分 32 秒；`scripts/package-portable.mjs` 成功生成 `artifacts/AgentTerminal-1794393126951-win-x64/`，含 AgentTerminal.exe、node.exe、runtime/UI 与 133 个生产依赖包（含原生模块）。已核对该产物目录存在。随后通过 UIA 确认配置、监控两个原生窗口均显示 Runtime 已连接，包内 Node runtime 已自动启动。CUA 截图只显示壁纸，窗口激活失败且无法取得坐标几何信息，属于当前工具环境限制，不能据此判定产品渲染失败，也不记作原生截图视觉验收通过。浏览器截图验证已通过，证据范围与原生桌面分开记录。
-- 主流程确认隔离目录下 installer/hooks 共 14 项测试通过，包含 Codex、Claude Code 本机 provider 配置。已核对源码字段和保存路径；本机配置写入通过不等同于新增 provider 的真实推理验证，也不涉及远端 Cloud secrets。
+- 主流程确认 Windows 桌面 release 编译成功，用时 1 分 32 秒。最终便携产物为 `artifacts/AgentTerminal-1794393818214-win-x64/`，180.3 MiB，含 AgentTerminal.exe、node.exe、runtime/UI 与生产依赖及模块自带许可证。已核对目录与固定直接依赖版本；主流程确认最新版 exe 自动启动包内 runtime、连接 home 为 `agentterminal-final-d69ef…`，health ready。包内 CLI 输出 `portable-runtime-ok`，`uname` 返回 MINGW、exit 0。
+- UIA 已确认配置、监控两个原生窗口均显示 Runtime 已连接。CUA 截图只显示壁纸，窗口激活失败且无法取得坐标几何信息，属于当前工具环境限制，不记为原生截图视觉验收通过。用户通过实体 Escape 停止 Computer Use 后未继续 UI 操作；浏览器截图验证已通过，不能将其扩大为原生 UI 控制验收。
+- 主流程确认隔离目录下 installer/hooks 共 14 项测试通过，包含 Codex、Claude Code 本机 provider 配置。新 backend 的浏览器 Claude provider 保存验证成功，模型、URL、has_key 正确且无 alert。本机配置写入通过不等同于新增 provider 的真实推理验证，也不涉及远端 Cloud secrets。
 - CLI `pnpm cli run "echo cli-ok"` 已由主流程实测，输出 cli-ok、exit 0；支持 run/start/list/stats/status/read/write/kill，使用已运行 runtime 的 connection home。
-- 主流程最终 `pnpm test` 为 26/26 PASS，用时 86 秒，包含实际 35 MiB ConPTY 输出测试；生产构建通过。runtime reviewer 单独 11/11 PASS，覆盖 32 MiB 输出上限、流式秘密、prompt、Unicode 分页、子进程取消、崩溃与交互。已替代此前超时/失败的中间状态。UI API 此前 4 项通过，本轮重跑结果尚未提供。
+- 主流程最终 `pnpm test` 为 26/26 PASS，用时 86 秒，包含实际 35 MiB ConPTY 输出测试；生产构建通过。runtime reviewer 单独 11/11 PASS，覆盖 32 MiB 输出上限、流式秘密、prompt、Unicode 分页、子进程取消、崩溃与交互。UI API 最终重跑 4/4 PASS。
 - 公开输出 offset 最终保持 UTF-16 code units，内部使用有界字节索引读取日志。未完成尾部 token 会延迟发布，超过 65536 字符的行省略；脱敏模式并非完整保密保证，PTY 换行可能影响匹配。通过压力测试不扩大为无限输出、所有秘密或所有平台均受保证。
-- 桌面生命周期已实测：停止第一个桌面 exe 后，同一包内 runtime health 仍返回 200；再次启动 GUI 成功重新连接。最终便携包正在重新生成，最终交付路径待本次打包结果；上文带时间戳目录是已验证的早期产物，不冒称最终包。
+- 桌面生命周期已实测：停止第一个桌面 exe 后，同一包内 runtime health 仍返回 200；再次启动 GUI 成功重新连接。最终包的直接生产依赖固定为本机已安装版本，模块 LICENSE 文件随生产依赖保留；不扩大为传递依赖完全可重复解析或全面许可证审计的结论。
 - Linux / macOS 当前只具备架构上的移植路线，尚无本项目对应平台实测或 CI 通过证据。
 
 官方 Codex 配置参考已于本次文档更新时读取：<https://developers.openai.com/codex/config-reference/>。它说明本机 `model_provider` / `model_providers` 与 hooks 配置，但本机 provider 编辑不代表配置 Codex Cloud 的远端 secrets；CLI hooks 的实际兼容性仍按上述版本与事件证据陈述。

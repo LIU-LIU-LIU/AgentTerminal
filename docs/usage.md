@@ -65,7 +65,13 @@ pnpm cli write TASK_ID "hello`n"
 
 桌面开发用 `pnpm desktop`，先完成 backend 构建，建议先 `pnpm start`，并继承相同 home。Tauri 默认打开配置与监控两个窗口，先读取连接；未发现可用连接时会尝试启动独立 Node runtime。可用 `AGENT_TERMINAL_NODE` / `AGENT_TERMINAL_RUNTIME_ENTRY` 指定 Node 与编译入口，启动日志为 `<home>/desktop-runtime.log`。便携目录优先查找旁边 `runtime/node.exe` 和 backend。Windows release 编译成功，UIA 已确认两个原生窗口均显示 Runtime 已连接，包内 Node runtime 自动启动已确认。原生截图因当前 CUA 环境的窗口激活与坐标获取限制仍未完成视觉验收；浏览器截图已验证。
 
-便携打包脚本为 `node scripts/package-portable.mjs`，前提是 backend/UI 已构建并完成 `pnpm --dir apps/ui tauri build --no-bundle`。目标为 `artifacts/AgentTerminal-<时间戳>-win-x64/`，包含桌面 exe、Node、编译后的 runtime/UI 与生产依赖。本次已成功生成 `artifacts/AgentTerminal-1794393126951-win-x64/`，安装 133 个生产依赖包（包括原生模块）；生成成功不等于便携启动验收通过。Git for Windows 仍是外部前提。脚本使用 npm 安装生产依赖，产物版本与原生 ABI 还需独立确认。集成会记录包内绝对路径，移动/删除前应先卸载接入，放到稳定位置再重新安装。当前 Tauri `bundle.active=false`，不是 MSI/NSIS 安装包。
+便携打包可执行 `pnpm desktop:build` 后 `pnpm package:portable`，对应 `node scripts/package-portable.mjs`。最终目录为 `artifacts/AgentTerminal-1794393818214-win-x64/`，大小 180.3 MiB，含 `AgentTerminal.exe`、`runtime/node.exe`、编译后的 runtime/UI 与生产依赖（含原生模块）。运行 `AgentTerminal.exe` 即可使用包内 Node 自动启动 runtime；已实测包内 CLI 输出 `portable-runtime-ok`、`uname` 返回 MINGW、exit 0。Git for Windows 与 WebView2 仍是外部前提。
+
+打包脚本从本机已安装模块读取直接生产依赖的精确版本，再用 npm 安装；这不代表每次重新解析传递依赖都逐字节一致。模块自带 LICENSE 文件保留在 `runtime/node_modules` 中。集成会记录包内绝对路径，移动/删除前应先卸载接入，放到稳定位置再重新安装。当前 Tauri `bundle.active=false`，不是 MSI/NSIS 安装包。单独运行包内 CLI 时，仍须使用运行中 runtime 的相同 home，例如在仓库根目录：
+
+```powershell
+& './artifacts/AgentTerminal-1794393818214-win-x64/runtime/node.exe' './artifacts/AgentTerminal-1794393818214-win-x64/runtime/dist/packages/runtime/src/cli.js' run 'echo portable-runtime-ok; uname -s'
+```
 
 ## 接入模式与配置文件
 
@@ -83,7 +89,7 @@ Windows 实测 Codex hook 通过 PowerShell 调用，需要 `& "绝对路径/nod
 
 ## 本机 Provider 与 Codex Cloud
 
-配置中心先选择 Codex 或 Claude Code，分别保存本机 provider；两者均已在 UI 与安装器实现。主流程报告隔离目录下 installer/hooks 共 14 项测试通过，包含两款 Agent 的本机 provider 配置；这不等同于新增 provider 的真实模型验证通过。
+配置中心先选择 Codex 或 Claude Code，分别保存本机 provider；两者均已在 UI 与安装器实现。隔离目录下 installer/hooks 共 14 项测试通过，包含两款 Agent 的本机 provider 配置。新 backend 的浏览器 Claude provider 保存也已验证：模型、URL 和 has_key 正确，页面无 alert；这不等同于新增 provider 的真实模型推理验证。
 
 Codex 修改本机 `$CODEX_HOME/config.toml` 的 `model`、`model_provider="agentterminal"`、`model_providers.agentterminal.base_url`；新建 provider 默认 `wire_api="responses"`。提交 API Key 时当前实现使用 `experimental_bearer_token` 写入 TOML。
 
@@ -113,7 +119,7 @@ $records | Select-Object path, backup, created_at
 
 ## MCP 工具与剩余限制
 
-`start` 立即返回 task_id；MCP `run` 最多等待约 10 秒，超时后继续使用同一 ID 调用 `status` / `read`，不要重复提交。`read` 的公开 offset 单位为 UTF-16 code units（JavaScript 字符串长度单位），内部用分段字节索引有界读取 UTF-8 日志，每页最多读取 65536 字节并保持字符边界。始终复用返回的 offset；`more=true` 时继续分页，不将字节位置当公开 offset。`write` 输入含换行可提交，`kill` 取消任务，`list` 列出近期任务。交互 Git Bash 通过 `interactive=true` 启动交互 shell，此时不是执行传入 command 的普通 `-c` 模式。
+`start` 立即返回 task_id；MCP `run` 最多等待约 10 秒，超时后继续使用同一 ID 调用 `status` / `read`，不要重复提交。`read` 的公开 offset 单位为 UTF-16 code units（JavaScript 字符串长度单位），内部用分段字节索引有界读取 UTF-8 日志，每页最多读取 65536 字节并保持字符边界。始终复用返回的 offset；`more=true` 时继续分页，不将字节位置当公开 offset。`write` 输入含换行可提交，`kill` 取消任务，`list` 列出近期任务。交互 Git Bash 使用 `interactive=true`：先执行传入的初始 command，再继续接受后续输入。
 
 - 当前并发上限 32，任务列表最多 500 条，UI 搜索范围为已加载记录；没有全历史分页、保留期限、历史日志轮转或总磁盘配额。单任务输出上限 32 MiB，超过 65536 个字符的行会省略并标记，不能承诺无限完整保留。
 - `session` 是元数据标签，不代表跨任务复用同一个 shell。重启只保留历史，不恢复活动 PTY；原 running 记录标记 abnormal。
