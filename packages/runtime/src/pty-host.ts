@@ -1,19 +1,18 @@
 import * as pty from 'node-pty';
 import { killProcessTree } from './shell.js';
+import { ReliableChannel } from './ipc.js';
 
 let terminal: pty.IPty | undefined;
 let stopping: Promise<void> | undefined;
-let queued = 0;
-let paused = false;
+const channel=new ReliableChannel((message,callback)=>{
+  if(!process.connected){callback(Object.assign(new Error('IPC disconnected'),{code:'ERR_IPC_CHANNEL_CLOSED'}));return;}
+  process.send!(message,callback);
+},()=>{try{terminal?.pause();}catch{}},()=>{try{terminal?.resume();}catch{}},()=>{void stop(null,1);});
+process.on('error',error=>{if(!['EAGAIN','ENOBUFS'].includes((error as NodeJS.ErrnoException).code||''))void stop(null,1);});
 
 function send(message: object) {
   if (!process.connected) return;
-  queued++;
-  process.send?.(message, () => {
-    queued--;
-    if (paused && queued < 8 && !stopping) { paused = false; terminal?.resume(); }
-  });
-  if (queued >= 32 && !paused && process.platform !== 'win32') { paused = true; terminal?.pause(); }
+  channel.push(message);
 }
 
 function stop(exitCode: number | null, signal?: number, natural = false) {
@@ -23,7 +22,7 @@ function stop(exitCode: number | null, signal?: number, natural = false) {
       await killProcessTree(terminal.pid);
       if (!natural) { try { terminal.kill(); } catch {} }
     }
-    if (process.connected) process.send?.({ type: 'exit', exitCode, signal }, () => process.exit(0));
+    if (process.connected) { channel.push({type:'exit',exitCode,signal}); await channel.idle(); process.exit(0); }
     else process.exit(0);
   })();
   return stopping;

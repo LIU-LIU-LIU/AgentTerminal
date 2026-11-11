@@ -63,7 +63,7 @@ pnpm cli write TASK_ID "hello`n"
 
 浏览器使用 runtime 自带静态资源最直接。`pnpm dev:ui` 仅启动 Vite，不启动 backend；先启动 runtime，再启动 Vite，使用 `http://localhost:1420/#token=实际token`。Vite 在启动时读取相同 home 的 connection.json 作为 `/api` 代理目标，也可设置 `AGENT_TERMINAL_RUNTIME_URL`，缺省兜底为端口 4317；runtime 换端口后需重启 Vite。
 
-桌面开发用 `pnpm desktop`，先完成 backend 构建，建议先 `pnpm start`，并继承相同 home。Tauri 默认打开配置与监控两个窗口，先读取连接；未发现可用连接时会尝试启动独立 Node runtime。可用 `AGENT_TERMINAL_NODE` / `AGENT_TERMINAL_RUNTIME_ENTRY` 指定 Node 与编译入口，启动日志为 `<home>/desktop-runtime.log`。便携目录优先查找旁边 `runtime/node.exe` 和 backend。Windows release 编译成功，UIA 已确认两个原生窗口均显示 Runtime 已连接，包内 Node runtime 自动启动已确认。原生截图因当前 CUA 环境的窗口激活与坐标获取限制仍未完成视觉验收；浏览器截图已验证。
+桌面开发用 `pnpm desktop`，先完成 backend 构建，建议先 `pnpm start`，并继承相同 home。Tauri 默认打开一个窗口，内含配置与监控 Tab，先读取连接；未发现可用连接时会尝试启动独立 Node runtime。可用 `AGENT_TERMINAL_NODE` / `AGENT_TERMINAL_RUNTIME_ENTRY` 指定 Node 与编译入口，启动日志为 `<home>/desktop-runtime.log`。便携目录优先查找旁边 `runtime/node.exe` 和 backend。Windows release 编译成功，UIA 已确认两个原生窗口均显示 Runtime 已连接，包内 Node runtime 自动启动已确认。原生截图因当前 CUA 环境的窗口激活与坐标获取限制仍未完成视觉验收；浏览器截图已验证。
 
 便携打包可执行 `pnpm desktop:build` 后 `pnpm package:portable`，对应 `node scripts/package-portable.mjs`。最终目录为 `artifacts/AgentTerminal-1794393818214-win-x64/`，大小 180.3 MiB，含 `AgentTerminal.exe`、`runtime/node.exe`、编译后的 runtime/UI 与生产依赖（含原生模块）。运行 `AgentTerminal.exe` 即可使用包内 Node 自动启动 runtime；已实测包内 CLI 输出 `portable-runtime-ok`、`uname` 返回 MINGW、exit 0。Git for Windows 与 WebView2 仍是外部前提。
 
@@ -87,17 +87,15 @@ Hooks 不转发原生命令去 runtime，也不获取其逐字节 PTY 输出。r
 
 Windows 实测 Codex hook 通过 PowerShell 调用，需要 `& "绝对路径/node.exe" "绝对路径/cli.js" …`；Claude hook 通过 Bash 调用，使用 `"绝对路径/node.exe" "绝对路径/cli.js" …`。不能将同一条命令字符串不加区分地用于两者。以最终安装器生成结果和真实调用为准。
 
-## 本机 Provider 与 Codex Cloud
+## Shell、终端 Token 与能力边界
 
-配置中心先选择 Codex 或 Claude Code，分别保存本机 provider；两者均已在 UI 与安装器实现。隔离目录下 installer/hooks 共 14 项测试通过，包含两款 Agent 的本机 provider 配置。新 backend 的浏览器 Claude provider 保存也已验证：模型、URL 和 has_key 正确，页面无 alert；这不等同于新增 provider 的真实模型推理验证。
+配置中心的“执行 Shell”提供默认 Shell 与各可执行文件绝对路径；留空自动检测。新任务继承默认值，MCP shell 参数可显式覆盖。默认本机 Git Bash；pwsh 优先 PowerShell 7，不存在则回退 Windows PowerShell。不会自动改写不同 Shell 的命令语法。
 
-Codex 修改本机 `$CODEX_HOME/config.toml` 的 `model`、`model_provider="agentterminal"`、`model_providers.agentterminal.base_url`；新建 provider 默认 `wire_api="responses"`。提交 API Key 时当前实现使用 `experimental_bearer_token` 写入 TOML。
+Provider / 模型 / 密钥管理已移除，交给 cc-switch 等工具；已有 Provider 配置保留。本项目不配置 Codex Cloud 远程环境。
 
-Claude Code 修改 `$CLAUDE_CONFIG_DIR/settings.json`（默认 `~/.claude/settings.json`）的 `env.ANTHROPIC_BASE_URL`、`env.ANTHROPIC_MODEL`，提交 API Key 时写 `env.ANTHROPIC_AUTH_TOKEN`，保留无关设置。它没有自动替换或清除已有 `ANTHROPIC_API_KEY`，多种认证并存时仍需核对实际 CLI 行为。两者 UI 留空密钥均保留已有值；这不是系统凭据库加密保存，备份也可能含密钥。
+监控所选任务显示终端文本输入 / 输出 Token 估算。输入含初始命令及后续终端写入，输出按保留日志；英文等约 4 字符 / token，CJK 约 1 字符 / token，尽力忽略 ANSI。按脱敏文本估算，不是模型 tokenizer 或实际 API usage；ANSI 跨输出块、终端协议响应、PTY 回显、折行与截断会影响结果。旧任务没有完整输入记录时显示未知，不伪造 0。估算写入 SQLite，重启保留。
 
-官方参考：<https://developers.openai.com/codex/config-reference/>。官方支持 `model_providers.<id>.env_key` 并不推荐直接 bearer token；当前 UI 未提供完整认证方式编辑器，也不验证网关兼容性、模型是否存在或实际推理成功。需要 env_key 时按官方说明手工配置并确保 Codex 进程继承环境变量。
-
-以上仅配置本机所选 Agent 的 provider。它不会创建或修改 Codex Cloud 的远程环境、远端 secrets、组织策略或云端执行容器；本机路径、MCP 和密钥不自动同步到 Cloud。当前官方 hooks 文档能力也不能证明某个本机 CLI 版本已完整实现；本项目兼容结论以实测版本及事件为界。
+桌面改为单个 main 窗口，监控和配置在同一窗口切换；历史双窗口验收记录仅描述旧版行为。
 
 ## 备份、卸载与恢复
 

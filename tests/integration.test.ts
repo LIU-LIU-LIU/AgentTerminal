@@ -29,6 +29,9 @@ test('authenticated HTTP + two independent MCP clients share one runtime; hooks 
     const response=await fetch(runtime.info.url+'/api/tasks',{headers});
     const tasks=await response.json() as any[];
     assert.deepEqual(new Set(tasks.map(task=>task.agent)),new Set(['codex','claude']));
+    const usage=await (await fetch(runtime.info.url+`/api/tasks/${tasks[0].task_id}/usage`,{headers})).json() as any;
+    assert.equal(usage.estimated,true); assert(usage.input_tokens>0); assert(usage.output_tokens>0);
+    assert.equal((await fetch(runtime.info.url+'/api/config/provider',{method:'POST',headers,body:'{}'})).status,404);
     assert.equal((await fetch(runtime.info.url+'/api/hooks',{method:'POST',headers,body:JSON.stringify({tool_name:'Bash',hook_event_name:'PreToolUse'})})).status,200);
     assert.equal((await fetch(runtime.info.url+'/api/export',{headers})).status,200);
     const stats=await (await fetch(runtime.info.url+'/api/stats',{headers})).json() as any;

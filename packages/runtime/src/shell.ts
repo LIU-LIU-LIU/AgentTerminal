@@ -2,7 +2,13 @@ import { existsSync } from 'node:fs';
 import { execFile, execFileSync } from 'node:child_process';
 import path from 'node:path';
 
-export function resolveShell(shell = 'gitbash'): { file: string; args: string[] } {
+export function resolveShell(shell = 'gitbash', override?: string): { file: string; args: string[] } {
+  if (override) {
+    if (!path.isAbsolute(override) || !existsSync(override)) throw new Error('Configured shell executable does not exist');
+    const args = shell === 'gitbash' ? ['--noprofile','--norc'] : shell === 'pwsh' ? ['-NoLogo','-NoProfile','-Command'] : shell === 'cmd' ? ['/d','/s','/c'] : undefined;
+    if (!args) throw new Error('Unsupported shell');
+    return {file:override,args};
+  }
   if (shell === 'gitbash') {
     if (process.platform !== 'win32') {
       const file = process.env.AGENT_TERMINAL_BASH || '/bin/bash';
@@ -26,7 +32,12 @@ export function resolveShell(shell = 'gitbash'): { file: string; args: string[] 
     if (!file) throw new Error('Git Bash not found. Set AGENT_TERMINAL_BASH to an absolute bash.exe path.');
     return { file, args: ['--noprofile', '--norc'] };
   }
-  if (shell === 'pwsh') return { file: process.platform === 'win32' ? 'pwsh.exe' : 'pwsh', args: ['-NoLogo', '-NoProfile', '-Command'] };
+  if (shell === 'pwsh') {
+    let file: string;
+    try { file=execFileSync(process.platform==='win32' ? path.join(process.env.SystemRoot || 'C:/Windows','System32/where.exe') : 'which',[process.platform==='win32'?'pwsh.exe':'pwsh'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).trim().split(/\r?\n/)[0]; }
+    catch { const fallback=path.join(process.env.SystemRoot || 'C:/Windows','System32/WindowsPowerShell/v1.0/powershell.exe'); if(process.platform!=='win32'||!existsSync(fallback))throw new Error('PowerShell not found'); file=fallback; }
+    return {file,args:['-NoLogo','-NoProfile','-Command']};
+  }
   if (shell === 'cmd' && process.platform === 'win32') return { file: process.env.ComSpec || 'C:/Windows/System32/cmd.exe', args: ['/d', '/s', '/c'] };
   throw new Error(`Unsupported shell: ${shell}`);
 }

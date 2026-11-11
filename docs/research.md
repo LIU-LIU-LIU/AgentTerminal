@@ -1,5 +1,7 @@
 # 调研与实测证据（2026-11-11）
 
+后续修改以 [current-status.md](current-status.md) 为准：Provider 功能已移除，桌面改为单窗口 Tab，新增 Shell 配置与终端 Token 估算；本轮后端回归 28/28。下文双窗口与 Provider 是历史记录，不代表当前产品范围。
+
 本页区分源码事实、历史研究、真实 Agent 报告与验证边界。根测试 26/26、runtime reviewer 11/11、生产构建均通过。UIA 已确认两个原生桌面窗口均显示 Runtime 已连接，包内 Node runtime 自动启动及 GUI 退出后重连已确认；浏览器视觉通过，原生截图受工具环境限制。
 
 ## Windows 环境与早期观察

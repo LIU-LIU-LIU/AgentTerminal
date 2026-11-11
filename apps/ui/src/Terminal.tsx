@@ -14,6 +14,7 @@ export function Terminal({ api, task, onError }: { api: Api; task: Task; onError
     term.loadAddon(fit);
     term.open(host.current);
     let disposed = false;
+    let finished = false;
     let offset = 0;
     let timer: ReturnType<typeof setTimeout>;
     let resizeTimer: ReturnType<typeof setTimeout>;
@@ -21,7 +22,11 @@ export function Terminal({ api, task, onError }: { api: Api; task: Task; onError
     const path = `/api/tasks/${encodeURIComponent(task.id)}`;
     let inputQueue = Promise.resolve();
     const input = term.onData(data => {
-      if (running.current) inputQueue = inputQueue.then(() => api.request(`${path}/input`, { input: data }, controller.signal)).then(() => undefined).catch(error => { if (!disposed) onError(error); });
+      if (running.current && !finished) inputQueue = inputQueue.then(async () => { if(running.current && !finished) await api.request(`${path}/input`, { input: data }, controller.signal); }).then(() => undefined).catch(async error => {
+        if(disposed)return;
+        try { const state=await api.request<Task>(path); if(!active(state)){finished=true;running.current=false;return;} } catch {}
+        onError(error);
+      });
     });
     const resize = () => {
       clearTimeout(resizeTimer);
@@ -37,11 +42,12 @@ export function Terminal({ api, task, onError }: { api: Api; task: Task; onError
     resize();
     async function poll() {
       try {
-        const data = await api.request<{ output: string; offset: number }>(`${path}/output?offset=${offset}`, undefined, controller.signal);
+        const data = await api.request<{ output: string; offset: number; done: boolean }>(`${path}/output?offset=${offset}`, undefined, controller.signal);
         if (disposed) return;
         if (data.offset < offset) term.reset();
         if (data.output) term.write(data.output);
         offset = data.offset;
+        if(data.done) { finished=true; running.current=false; }
       } catch (error) { if (!disposed) onError(error); }
       if (!disposed) timer = setTimeout(poll, running.current ? 500 : 2000);
     }

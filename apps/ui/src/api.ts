@@ -4,8 +4,9 @@ export type Agent = 'codex' | 'claude';
 export type Mode = 'prefer' | 'audit' | 'strict';
 export interface Connection { endpoint: string; token: string }
 export interface AgentConfig { installed: boolean; home: string; mcp: unknown; hook: unknown; skill: unknown }
-export interface ProviderConfig { base_url: string; model: string; has_key: boolean }
-export interface Config { agents: Record<Agent, AgentConfig>; provider: ProviderConfig; providers?: Record<Agent, ProviderConfig>; mode: Mode }
+export type Shell = 'gitbash' | 'pwsh' | 'cmd';
+export interface ShellConfig { default_shell: Shell; paths: Partial<Record<Shell, string>>; detected: Record<Shell, { available: boolean; path?: string; error?: string }> }
+export interface Config { agents: Record<Agent, AgentConfig>; shell: ShellConfig; mode: Mode }
 export interface Task { id: string; command?: string; agent?: string; status?: string; cwd?: string; shell?: string; startedAt?: string; started_at?: string; exitCode?: number | null; exit_code?: number | null; [key: string]: unknown }
 export type Stats = Record<string, unknown>;
 

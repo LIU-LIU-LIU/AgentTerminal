@@ -5,7 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Engine } from './engine.js';
 import { dataHome } from './client.js';
-import { getConfiguration, previewIntegration, installIntegration, uninstallIntegration, updateProvider, toggleSkill } from '../../installer/src/index.js';
+import { getConfiguration, previewIntegration, installIntegration, uninstallIntegration, toggleSkill } from '../../installer/src/index.js';
+import { shellConfiguration, saveShellSettings } from './settings.js';
 
 export async function startRuntime(home = dataHome()) {
   mkdirSync(home, { recursive: true, mode: 0o700 });
@@ -51,10 +52,11 @@ export async function startRuntime(home = dataHome()) {
       if (route === '/api/health') return send({ ok: true, version: '0.1.0' });
       if (route === '/api/tasks' && method === 'GET') return send(engine.list());
       if (route === '/api/tasks' && method === 'POST') return send(engine.start(await body(request)), 201);
-      const task = route.match(/^\/api\/tasks\/([^/]+)(?:\/(output|input|kill|resize))?$/);
+      const task = route.match(/^\/api\/tasks\/([^/]+)(?:\/(output|input|kill|resize|usage))?$/);
       if (task) {
         const [, id, action] = task;
         if (!action && method === 'GET') return send(engine.get(id));
+        if (action === 'usage' && method === 'GET') return send(engine.usage(id));
         if (action === 'output' && method === 'GET') return send(engine.output(id, Number(url.searchParams.get('offset') || 0)));
         if (method !== 'POST') return send({error:'Method not allowed'},405);
         const payload = await body(request);
@@ -68,14 +70,14 @@ export async function startRuntime(home = dataHome()) {
       if (route === '/api/export') { response.writeHead(200, {'Content-Type':'application/x-ndjson', 'Content-Disposition':'attachment; filename="agentterminal.jsonl"'}); response.end(engine.export()); return; }
       if (route === '/api/hooks' && method === 'POST') { engine.hook(await body(request)); return send({ok:true}); }
       if (route === '/api/hooks' && method === 'GET') return send(engine.db.prepare('SELECT id,created_at,event FROM hooks ORDER BY id DESC LIMIT 200').all().map((row:any)=>({...row,event:JSON.parse(row.event)})));
-      if (route === '/api/config' && method === 'GET') return send(getConfiguration());
+      if (route === '/api/config' && method === 'GET') return send({...getConfiguration(),shell:shellConfiguration(home)});
+      if (route === '/api/config/shell' && method === 'POST') return send(saveShellSettings(home,await body(request)));
       if (route === '/api/config/preview' && method === 'GET') return send(previewIntegration(url.searchParams.get('agent') as 'codex'|'claude', url.searchParams.get('mode') as 'prefer'|'audit'|'strict' || 'audit'));
       if (route === '/api/config/integration' && method === 'POST') {
         const payload = await body(request);
         if (!['codex','claude'].includes(payload.agent) || !['install','uninstall'].includes(payload.action)) throw new Error('Invalid integration');
         return send(payload.action === 'install' ? installIntegration(payload.agent, payload.mode || 'audit') : uninstallIntegration(payload.agent));
       }
-      if (route === '/api/config/provider' && method === 'POST') return send(updateProvider(await body(request)));
       if (route === '/api/config/skill' && method === 'POST') { const payload = await body(request); return send(toggleSkill(payload.agent, payload.enabled)); }
       if (route === '/api/events') {
         response.writeHead(200, {'Content-Type':'text/event-stream','Cache-Control':'no-cache','Connection':'keep-alive'});

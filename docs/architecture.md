@@ -18,8 +18,10 @@ helper 使用 Windows ConPTY，取消时对 PTY PID 调用系统 `taskkill.exe /
 
 这是根据观察采用的工程修复，不宣称证明 node-pty 内部所有挂死根因或彻底解决所有退出竞态。代价是每任务一个 Node helper 的内存与启动开销；Windows 进程树、断连、异常退出以及其他平台都需持续回归。PTY helper 不是权限隔离或安全沙箱。
 
-## ADR-003：配置窗口与监控窗口共用 runtime
+## ADR-003：单窗口、两种工作视图
 
-React UI 提供配置中心和监控/统计两个角色，通过 URL 参数选页，浏览器或 Tauri 均能另开窗口。xterm.js 负责 ANSI 渲染、输入和 resize，执行不由 UI 所在进程承担。关闭 UI 不等于停止 runtime；多个窗口/Agent 可观察同一个 task_id。
+单个 Tauri main 窗口内切换监控与配置 Tab。xterm.js 负责渲染和交互；关闭 UI 不终止独立 Runtime。安装器只负责 AgentTerminal 的 MCP / Hooks / Skill 托管内容，模型和 Provider 交给外部工具。
 
-配置修改经 runtime 安装器执行，先备份、管理指定区块并支持卸载。provider 分别写本机 Codex TOML 与 Claude Code settings，隔离 installer/hooks 的 14 项测试已通过；Cloud 环境与远端 secrets 不在此架构范围内。浏览器配置安装/卸载、中文终端和统计已验证；Windows release 编译及便携目录生成成功，UIA 已确认两个原生窗口均显示 Runtime 已连接，包内 Node runtime 自动启动已确认。原生截图受工具环境限制，视觉验收仍待补。桌面可发现或启动独立 runtime，CLI / MCP 仍依赖事先运行的 runtime。
+## ADR-004：背压与统计边界
+
+PTY helper 的 IPC 消息串行发送，高水位暂停 PTY 读取、低水位恢复；EAGAIN / ENOBUFS 延迟重试，致命失败结束任务。避免无限并发写 IPC。每任务存终端文本 Token 估算，明确不等于模型上下文或计费用量。Shell 默认值与路径持久化到 runtime home 的 shell.json，显式 MCP 参数优先。

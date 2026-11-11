@@ -233,32 +233,6 @@ export function uninstallIntegration(agent: Agent) {
   return getConfiguration();
 }
 
-export function updateProvider(input: { agent?: Agent; base_url: string; model: string; api_key?: string }) {
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(k => !['agent', 'base_url', 'model', 'api_key'].includes(k)) || typeof input.base_url !== 'string' || typeof input.model !== 'string' || (input.api_key !== undefined && typeof input.api_key !== 'string')) throw new Error('Invalid provider settings');
-  const agent = input.agent === undefined ? 'codex' : input.agent;
-  agentName(agent);
-  const url = new URL(input.base_url);
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !input.model.trim()) throw new Error('Invalid provider settings');
-  if (agent === 'claude') {
-    const path = join(home('claude'), 'settings.json');
-    const doc = json(read(path));
-    put(doc, ['env', 'ANTHROPIC_BASE_URL'], input.base_url);
-    put(doc, ['env', 'ANTHROPIC_MODEL'], input.model);
-    if (input.api_key !== undefined) put(doc, ['env', 'ANTHROPIC_AUTH_TOKEN'], input.api_key);
-    write(path, format(doc));
-    return getConfiguration();
-  }
-  const path = join(home('codex'), 'config.toml');
-  const doc = toml(read(path) || '');
-  doc.model = input.model;
-  doc.model_provider = 'agentterminal';
-  doc.model_providers ??= {};
-  const provider = doc.model_providers.agentterminal ??= { name: 'AgentTerminal', wire_api: 'responses' };
-  provider.base_url = input.base_url;
-  if (input.api_key !== undefined) provider.experimental_bearer_token = input.api_key;
-  write(path, TOML.stringify(doc as TOML.JsonMap));
-  return getConfiguration();
-}
 export function toggleSkill(agent: Agent, enabled: boolean) {
   agentName(agent);
   if (typeof enabled !== 'boolean') throw new Error('Skill enabled must be a boolean');
@@ -280,12 +254,5 @@ export function getConfiguration() {
     const hasSkill = read(join(home(agent), 'skills', 'agentterminal', 'SKILL.md')) === skill;
     return [agent, { installed: Boolean(saved.agents[agent]) && mcp, home: home(agent), mcp, hook, skill: hasSkill }];
   })) as Record<Agent, { installed: boolean; home: string; mcp: boolean; hook: boolean; skill: boolean }>;
-  const doc = toml(read(join(home('codex'), 'config.toml')) || '');
-  const provider = doc.model_providers?.[doc.model_provider] || {};
-  const env = json(read(join(home('claude'), 'settings.json'))).env || {};
-  const providers = {
-    codex: { base_url: scrubText(String(provider.base_url || '')), model: scrubText(String(doc.model || '')), has_key: Boolean(provider.experimental_bearer_token || provider.api_key || (provider.env_key && process.env[provider.env_key])) },
-    claude: { base_url: scrubText(String(env.ANTHROPIC_BASE_URL || '')), model: scrubText(String(env.ANTHROPIC_MODEL || '')), has_key: Boolean(env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY) },
-  };
-  return { agents, providers, provider: providers.codex, mode: saved.mode || 'prefer' as Mode };
+  return { agents, mode: saved.mode || 'prefer' as Mode };
 }

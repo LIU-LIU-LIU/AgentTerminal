@@ -32,6 +32,8 @@ bash research/claude-e2e.sh
 
 ## 真实双 Agent 研究
 
+本轮新增：`node research/ui-current-smoke.mjs` 启动独立临时配置 / Runtime 并创建示例任务，用于浏览器验证 Shell 配置与 Token 估算；Ctrl+C 关闭。`node research/github-repository.mjs` 非交互检查现有 GitHub 凭据权限，不输出凭据；`--apply` 更新仓库简介 / topics。
+
 主流程提供的 `node research/agents-live.mjs` 会新建临时目录和自己的 runtime，再并行启动真实 Codex / Claude，生成 `<临时目录>/report.json`。它与上面的外部 runtime smoke 是不同生命周期。可用 `AGENT_TERMINAL_CODEX` 指定 Codex 可执行文件、`AGENT_TERMINAL_CLAUDE_ENTRY` 指定 Claude Node 入口；需先检查当前脚本及已安装 CLI 版本。
 
 该专用研究脚本使用放宽审批/沙箱与 hook trust 的 CLI 参数，Claude 子进程设置上述 workaround 环境变量；这仅描述该研究进程，不是产品默认，也不修改全局配置。它的退出成功判断主要检查两个 Agent 的任务存在，不能单凭脚本 exit 0 就认定 strict 已通过；必须同时读 tasks 的状态/退出码、observations 的原生工具事件及模型输出中的 deny 原因。已确认结果见 [证据记录](../docs/research.md)。

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
@@ -7,6 +7,8 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { killProcessTree, resolveShell } from './shell.js';
 import { redact } from './redact.js';
+import { loadShellSettings } from './settings.js';
+import { tokenWeight } from './usage.js';
 
 export interface Task {
   task_id: string; agent: string; session: string; cwd: string; shell: string; command: string;
@@ -37,6 +39,7 @@ export class Engine extends EventEmitter {
       task_id TEXT PRIMARY KEY, agent TEXT, session TEXT, cwd TEXT, shell TEXT, command TEXT,
       status TEXT, exit_code INTEGER, pid INTEGER, started_at TEXT, ended_at TEXT);
       CREATE TABLE IF NOT EXISTS hooks (id INTEGER PRIMARY KEY, created_at TEXT, event TEXT);`);
+    this.db.exec('CREATE TABLE IF NOT EXISTS terminal_usage (task_id TEXT PRIMARY KEY, input_weight REAL, output_weight REAL NOT NULL DEFAULT 0, input_complete INTEGER NOT NULL DEFAULT 1)');
     this.db.prepare("UPDATE tasks SET status='abnormal', ended_at=? WHERE status='running'").run(new Date().toISOString());
   }
   start(input: StartRequest): Task {
@@ -53,8 +56,9 @@ export class Engine extends EventEmitter {
     const cols = input.cols ?? 100, rows = input.rows ?? 30;
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 2 || cols > 500 || rows > 300) throw new Error('Invalid terminal size');
     if (this.sessions.size >= 32) throw new Error('Concurrent task limit reached (32)');
-    const shell = input.shell || 'gitbash';
-    const spec = resolveShell(shell);
+    const settings=loadShellSettings(this.home);
+    const shell = input.shell || settings.default_shell;
+    const spec = resolveShell(shell,settings.paths[shell as keyof typeof settings.paths]);
     const cwd = path.resolve(input.cwd || process.cwd());
     if (!statSync(cwd).isDirectory()) throw new Error('cwd must be a directory');
     const task: Task = { task_id: randomUUID(), agent: input.agent || 'manual', session: input.session || '', cwd, shell, command: redact(input.command), status: 'running', exit_code: null, pid: null, started_at: new Date().toISOString(), ended_at: null };
@@ -63,6 +67,7 @@ export class Engine extends EventEmitter {
     const compiled = fileURLToPath(new URL('./pty-host.js', import.meta.url));
     const terminal = fork(existsSync(compiled) ? compiled : fileURLToPath(new URL('./pty-host.ts', import.meta.url)), [], { stdio: ['ignore','ignore','pipe','ipc'], windowsHide:true });
     this.db.prepare('INSERT INTO tasks VALUES (@task_id,@agent,@session,@cwd,@shell,@command,@status,@exit_code,@pid,@started_at,@ended_at)').run(task);
+    this.db.prepare('INSERT INTO terminal_usage(task_id,input_weight) VALUES (?,?)').run(task.task_id, tokenWeight(task.command));
     writeFileSync(this.logPath(task.task_id), '', { mode: 0o600 });
     this.sessions.set(task.task_id, terminal);
     this.pending.set(task.task_id, { raw: '', published: 0, dropping: false, bytes: 0, truncated: false });
@@ -118,7 +123,10 @@ export class Engine extends EventEmitter {
     const remaining = MAX_LOG - Buffer.byteLength(TRUNCATED) - state.bytes;
     let length = Math.min(buffer.length, remaining);
     while (length > 0 && length < buffer.length && (buffer[length] & 0xc0) === 0x80) length--;
-    if (length) appendFileSync(path.join(this.home, 'logs', `${id}.log`), buffer.subarray(0, length));
+    if (length) {
+      appendFileSync(path.join(this.home, 'logs', `${id}.log`), buffer.subarray(0, length));
+      this.db.prepare('UPDATE terminal_usage SET output_weight=output_weight+? WHERE task_id=?').run(tokenWeight(buffer.subarray(0,length).toString('utf8')),id);
+    }
     state.bytes += length;
     if (buffer.length > remaining) {
       appendFileSync(path.join(this.home, 'logs', `${id}.log`), TRUNCATED);
@@ -217,7 +225,16 @@ export class Engine extends EventEmitter {
       return { output, offset: offset + output.length, done: task.status !== 'running', more: next < size };
     } finally { closeSync(fd); }
   }
-  input(id: string, input: string) { const terminal = this.sessions.get(id); if (!terminal?.connected) throw new Error('Task is not running'); if(typeof input !== 'string' || input.length > 65536) throw new Error('input must be text of at most 65536 characters'); terminal.send({type:'input',input}, () => {}); }
+  input(id: string, input: string) { const terminal = this.sessions.get(id); if (!terminal?.connected) throw new Error('Task is not running'); if(typeof input !== 'string' || input.length > 65536) throw new Error('input must be text of at most 65536 characters'); terminal.send({type:'input',input}, () => {}); this.db.prepare('UPDATE terminal_usage SET input_weight=input_weight+? WHERE task_id=?').run(tokenWeight(redact(input)),id); }
+  usage(id: string) {
+    this.get(id);
+    let row = this.db.prepare('SELECT * FROM terminal_usage WHERE task_id=?').get(id) as {input_weight:number|null;output_weight:number;input_complete:number}|undefined;
+    if (!row) {
+      this.db.prepare('INSERT INTO terminal_usage(task_id,input_weight,output_weight,input_complete) VALUES (?,NULL,?,0)').run(id, tokenWeight(readFileSync(this.logPath(id),'utf8')));
+      row = this.db.prepare('SELECT * FROM terminal_usage WHERE task_id=?').get(id) as NonNullable<typeof row>;
+    }
+    return { input_tokens: row.input_weight===null?null:Math.ceil(row.input_weight), output_tokens:Math.ceil(row.output_weight), input_complete:Boolean(row.input_complete), output_truncated:statSync(this.logPath(id)).size>=MAX_LOG-Buffer.byteLength(TRUNCATED), estimated:true, method:'terminal-text-heuristic-v1', basis:'redacted retained terminal text; Latin ~4 characters/token, CJK ~1 character/token; not model usage' };
+  }
   resize(id: string, cols: number, rows: number) {
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 2 || rows < 2 || cols > 500 || rows > 300) throw new Error('Invalid terminal size');
     const terminal = this.sessions.get(id);

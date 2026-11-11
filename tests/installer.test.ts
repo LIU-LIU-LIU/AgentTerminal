@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdi
 import { tmpdir } from 'node:os';
 import { join, isAbsolute } from 'node:path';
 import * as TOML from '@iarna/toml';
-import { getConfiguration, previewIntegration, installIntegration, uninstallIntegration, updateProvider, toggleSkill } from '../packages/installer/src/index.js';
+import { getConfiguration, previewIntegration, installIntegration, uninstallIntegration, toggleSkill } from '../packages/installer/src/index.js';
 
 function sandbox(t: any) {
   const root = mkdtempSync(join(tmpdir(), 'agentterminal-installer-'));
@@ -100,58 +100,21 @@ test('exact restoration, edited managed entries, and owned skills', t => {
   assert(readFileSync(path, 'utf8').includes('--external-agent'));
 });
 
-test('provider updates explicit Codex fields, keeps prior key and unrelated settings, never returns keys', t => {
+test('integration preserves existing provider settings without exposing them', t => {
   const s = sandbox(t), path = join(s.codex, 'config.toml');
-  writeFileSync(path, 'model="old"\nmodel_reasoning_effort="high"\n[model_providers.agentterminal]\nname="Custom"\nwire_api="responses"\nexperimental_bearer_token="private-key"\ncustom="keep"\n');
-  installIntegration('codex', 'audit');
-  const config = updateProvider({ base_url: 'https://provider.example/v1', model: 'new' });
-  assert.equal(config.provider.has_key, true);
-  assert.deepEqual(config.provider, config.providers.codex);
-  assert(!JSON.stringify(config).includes('private-key'));
-  const doc: any = TOML.parse(readFileSync(path, 'utf8'));
-  assert.equal(doc.model_reasoning_effort, 'high');
-  assert.equal(doc.model_providers.agentterminal.custom, 'keep');
-  assert.equal(doc.model_providers.agentterminal.experimental_bearer_token, 'private-key');
-  uninstallIntegration('codex');
-  const after: any = TOML.parse(readFileSync(path, 'utf8'));
-  assert.equal(after.model, 'new');
-  assert(!after.mcp_servers?.agentterminal);
-});
-
-test('Claude provider changes only requested env fields, backs up settings, and preserves keys when omitted', t => {
-  const s = sandbox(t), path = join(s.claude, 'settings.json');
-  const original = { permissions: { allow: ['Read'] }, env: { OTHER: 'keep', ANTHROPIC_AUTH_TOKEN: 'claude-private-key', ANTHROPIC_MODEL: 'old' } };
-  writeFileSync(path, JSON.stringify(original));
-  const config = updateProvider({ agent: 'claude', base_url: 'https://claude.example/v1', model: 'new' });
-  assert.deepEqual(config.providers.claude, { base_url: 'https://claude.example/v1', model: 'new', has_key: true });
-  assert.deepEqual(config.provider, config.providers.codex);
-  assert(!JSON.stringify(config).includes('claude-private-key'));
-  assert(!existsSync(join(s.codex, 'config.toml')));
-  const after = JSON.parse(readFileSync(path, 'utf8'));
-  assert.deepEqual(after, { ...original, env: { ...original.env, ANTHROPIC_BASE_URL: 'https://claude.example/v1', ANTHROPIC_MODEL: 'new' } });
-  const backups = readFileSync(join(s.data, 'backups', 'index.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.equal(backups[0].path, path);
-  assert.deepEqual(JSON.parse(readFileSync(backups[0].backup, 'utf8')), original);
-  const updated = updateProvider({ agent: 'claude', base_url: 'http://localhost:9000', model: 'local', api_key: 'replacement-private-key' });
-  assert.equal(JSON.parse(readFileSync(path, 'utf8')).env.ANTHROPIC_AUTH_TOKEN, 'replacement-private-key');
-  assert(!JSON.stringify(updated).includes('replacement-private-key'));
-  assert(!JSON.stringify(previewIntegration('claude', 'audit')).includes('replacement-private-key'));
-  installIntegration('claude', 'audit');
-  uninstallIntegration('claude');
-  assert.equal(getConfiguration().providers.claude.model, 'local');
-});
-
-test('explicit Codex provider selection and Claude provider initialization', t => {
-  const s = sandbox(t);
-  const initial = getConfiguration();
-  assert.deepEqual(initial.providers.claude, { base_url: '', model: '', has_key: false });
-  const codex = updateProvider({ agent: 'codex', base_url: 'https://codex.example', model: 'codex-model', api_key: 'codex-private-key' });
-  assert.equal(codex.providers.codex.has_key, true);
-  assert(!existsSync(join(s.claude, 'settings.json')));
-  const claude = updateProvider({ agent: 'claude', base_url: 'https://claude.example', model: 'claude-model' });
-  assert.equal(claude.providers.claude.has_key, false);
-  assert.equal(claude.providers.codex.model, 'codex-model');
-  assert(!JSON.stringify(claude).includes('codex-private-key'));
+  const original = 'model="existing"\nmodel_provider="external"\n[model_providers.external]\nbase_url="https://example.com"\nexperimental_bearer_token="private-key"\n';
+  writeFileSync(path, original);
+  const claude = join(s.claude, 'settings.json');
+  const settings = { env: { ANTHROPIC_AUTH_TOKEN: 'private-key', ANTHROPIC_MODEL: 'existing' } };
+  writeFileSync(claude, JSON.stringify(settings));
+  for (const agent of ['codex', 'claude'] as const) {
+    installIntegration(agent, 'strict');
+    assert(!('providers' in getConfiguration()));
+    assert(!JSON.stringify(getConfiguration()).includes('private-key'));
+    uninstallIntegration(agent);
+  }
+  assert.equal(readFileSync(path, 'utf8'), original);
+  assert.deepEqual(JSON.parse(readFileSync(claude, 'utf8')), settings);
 });
 
 test('invalid API inputs do not mutate configurations', t => {
@@ -159,9 +122,6 @@ test('invalid API inputs do not mutate configurations', t => {
   assert.throws(() => installIntegration('other' as any, 'strict'));
   assert.throws(() => previewIntegration('codex', 'other' as any));
   assert.throws(() => toggleSkill('codex', 'false' as any));
-  for (const input of [null, {}, { base_url: 1, model: 'm' }, { base_url: 'file:///x', model: 'm' }, { base_url: 'https://example.com', model: '' }, { base_url: 'https://example.com', model: 'm', api_key: 4 }, { base_url: 'https://example.com', model: 'm', extra: true }]) assert.throws(() => updateProvider(input as any));
-  for (const agent of [null, '', 'other', 1, false]) assert.throws(() => updateProvider({ agent, base_url: 'https://example.com', model: 'm' } as any));
-  for (const input of [{ base_url: 'file:///x', model: 'm' }, { base_url: 'https://example.com', model: ' ' }, { base_url: 'https://example.com', model: 'm', api_key: 4 }]) assert.throws(() => updateProvider({ ...input, agent: 'claude' } as any));
   assert.deepEqual(readdirSync(s.codex), []);
   assert.deepEqual(readdirSync(s.claude), []);
   assert.equal(getConfiguration().agents.codex.installed, false);

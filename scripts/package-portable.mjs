@@ -13,6 +13,15 @@ const destination=path.join(root,'artifacts',`AgentTerminal-${Date.now()}-win-x6
 const runtime=path.join(destination,'runtime');
 mkdirSync(runtime,{recursive:true});
 cpSync(desktop,path.join(destination,'AgentTerminal.exe'));
+for(const file of ['LICENSE','NOTICE','THIRD_PARTY_NOTICES.md']) cpSync(path.join(root,file),path.join(destination,file));
+const uiLicenses=path.join(destination,'third-party-licenses');
+mkdirSync(uiLicenses);
+for(const [name,file] of [['react','LICENSE'],['react-dom','LICENSE'],['@xterm/xterm','LICENSE'],['@xterm/addon-fit','LICENSE'],['lucide-react','LICENSE'],['@tauri-apps/api','LICENSE-MIT'],['@tauri-apps/api','LICENSE-APACHE-2.0']]) {
+  cpSync(path.join(root,'apps/ui/node_modules',name,file),path.join(uiLicenses,name.replaceAll('/','-')+'-'+file));
+}
+const nodeLicense=await fetch(`https://raw.githubusercontent.com/nodejs/node/${process.version}/LICENSE`);
+if(!nodeLicense.ok) throw new Error('Could not obtain Node.js distribution license');
+writeFileSync(path.join(destination,'NODE_LICENSE'),await nodeLicense.text());
 cpSync(process.execPath,path.join(runtime,'node.exe'));
 cpSync(path.join(root,'dist'),path.join(runtime,'dist'),{recursive:true});
 cpSync(path.join(root,'apps/ui/dist'),path.join(runtime,'apps/ui/dist'),{recursive:true});
@@ -21,5 +30,5 @@ const dependencies=Object.fromEntries(Object.keys(manifest.dependencies).map(nam
 writeFileSync(path.join(runtime,'package.json'),JSON.stringify({name:'agentterminal-runtime',version:manifest.version,type:'module',private:true,dependencies},null,2));
 const npmCli=path.join(path.dirname(process.execPath),'node_modules/npm/bin/npm-cli.js');
 execFileSync(process.execPath,[npmCli,'install','--omit=dev','--no-audit','--no-fund'],{cwd:runtime,stdio:'inherit',windowsHide:true});
-writeFileSync(path.join(destination,'README.txt'),'AgentTerminal Windows portable\r\nLaunch AgentTerminal.exe. Two windows open: configuration and monitoring.\r\nGit for Windows must be installed. Runtime keeps running after closing windows.\r\nConfiguration integrations reference this folder: keep it in a stable location.\r\nBefore moving or deleting it, uninstall integrations in the configuration UI.\r\n');
+writeFileSync(path.join(destination,'README.txt'),'AgentTerminal Windows portable\r\nLaunch AgentTerminal.exe. One window contains monitoring and configuration tabs.\r\nGit for Windows must be installed. Runtime keeps running after closing the window.\r\nConfiguration integrations reference this folder: keep it in a stable location.\r\nBefore moving or deleting it, uninstall integrations in the configuration UI.\r\nShell defaults and paths are in Configuration. Terminal token counts are text estimates, not model billing usage.\r\nSee LICENSE, NOTICE, THIRD_PARTY_NOTICES.md and NODE_LICENSE.\r\n');
 console.log('Portable application:',destination);

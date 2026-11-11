@@ -7,7 +7,7 @@ const server = new McpServer({ name: 'agentterminal', version: '0.1.0' });
 const agentIndex = process.argv.indexOf('--agent');
 const agent = agentIndex >= 0 ? process.argv[agentIndex + 1] || 'unknown' : 'unknown';
 const response = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }] });
-const startSchema = { command: z.string(), cwd: z.string().optional(), shell: z.enum(['gitbash', 'pwsh', 'cmd']).default('gitbash'), session: z.string().optional(), interactive: z.boolean().optional() };
+const startSchema = { command: z.string(), cwd: z.string().optional(), shell: z.enum(['gitbash', 'pwsh', 'cmd']).optional(), session: z.string().optional(), interactive: z.boolean().optional() };
 server.tool('start', 'Start a task and immediately return task_id. Use read for incremental output, write for input.', startSchema, async input => response(await request('/api/tasks', { ...input, cwd:input.cwd || process.cwd(), agent })));
 server.tool('run', 'Run a command for up to 10 seconds. If still running, return task_id and continue using read/status; never start duplicates.', startSchema, async input => {
   const task = await request('/api/tasks', { ...input, cwd:input.cwd || process.cwd(), agent });
