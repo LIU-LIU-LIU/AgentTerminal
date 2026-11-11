@@ -4,7 +4,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && pnpm --dir apps/ui build",
     "build:backend": "tsc -p tsconfig.json",
-    "start": "node dist/packages/runtime/src/index.js",
+    "start": "node dist/packages/runtime/src/service.js start",
+    "stop": "node dist/packages/runtime/src/service.js stop",
+    "restart": "node dist/packages/runtime/src/service.js restart",
     "cli": "node dist/packages/runtime/src/cli.js",
     "test": "tsx --test tests/*.test.ts",
     "dev:ui": "pnpm --dir apps/ui dev",

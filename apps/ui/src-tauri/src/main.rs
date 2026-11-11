@@ -74,8 +74,29 @@ async fn connection(state: tauri::State<'_, HostState>) -> Result<Connection, St
     resolve_connection(&state)
 }
 
+#[tauri::command]
+async fn service_control(action: String, app: tauri::AppHandle) -> Result<(), String> {
+    if action != "stop" && action != "restart" { return Err("无效服务操作".into()); }
+    let entry = runtime_entry()?.with_file_name("service.js");
+    let portable_node = env::current_exe().ok().and_then(|exe| exe.parent().map(|parent| parent.join("runtime/node.exe"))).filter(|node| node.is_file());
+    let node = env::var_os("AGENT_TERMINAL_NODE").or_else(|| portable_node.map(|node| node.into_os_string())).unwrap_or_else(|| "node".into());
+    let should_exit = action == "stop";
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut command = Command::new(node);
+        command.arg(entry).arg(action);
+        #[cfg(windows)] {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        command.output().map_err(|error| error.to_string())
+    }).await.map_err(|error| error.to_string())??;
+    if !result.status.success() { return Err(String::from_utf8_lossy(&result.stderr).trim().to_string()); }
+    if should_exit { app.exit(0); }
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default().manage(HostState(Mutex::new(())))
-        .invoke_handler(tauri::generate_handler![connection])
+        .invoke_handler(tauri::generate_handler![connection, service_control])
         .run(tauri::generate_context!()).expect("failed to run Agent Terminal");
 }

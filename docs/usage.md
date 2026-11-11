@@ -6,9 +6,9 @@
 
 在仓库根目录运行 `pnpm install`、`pnpm build`、`pnpm start`。`pnpm build` 同时编译 backend 与 UI；只调试 backend 可用 `pnpm build:backend`，但浏览器 UI 仍需要单独构建。Node 建议使用已实测的 22 系列；pnpm 版本由根 package.json 指定。node-pty 与 better-sqlite3 为原生模块，更换 Node 后应重新安装/构建原生依赖。
 
-`pnpm start` 是 runtime 启动命令，输出带 `#token=…` 的地址。CLI、Hooks 和 MCP 都需要事先运行 runtime，不会按需自动启动；Tauri 桌面外壳另有发现/启动逻辑。CLI 入口为 `dist/packages/runtime/src/cli.js`，根目录可通过 `pnpm cli` 调用；不要直接把 MCP stdio 入口当命令行交互工具。
+`pnpm start` 在后台启动 runtime，重复执行会复用健康实例并显示带 `#token=…` 的地址。CLI、Hooks 和 MCP 需要事先运行 runtime；Tauri 桌面外壳也可自动启动。CLI 入口为 `dist/packages/runtime/src/cli.js`，根目录可通过 `pnpm cli` 调用。
 
-runtime 仅监听 `127.0.0.1` 随机端口，通过 Bearer token 认证 API。启动信息保存为 runtime home 中的 `connection.json`（`url`、`token`、`pid`）；重启 token 与端口会变化。浏览器需重新打开新地址。停止 runtime 在其终端按 Ctrl+C；关闭浏览器窗口不会停止独立的 runtime，停止 runtime 会取消活动任务。
+runtime 监听 `127.0.0.1`，首次启动生成随机端口和 token，保存于 `connection.json`。`pnpm stop` 停止并取消任务；`pnpm run restart` 重启并保留连接地址及历史，供界面恢复连接。完全停止后再次启动会生成新连接。服务在后台运行，启动命令退出或 Ctrl+C 不停止它。界面顶部提供“重启服务”和“完全退出”；有活动任务时提示确认。桌面完全退出会关闭自身窗口，浏览器显示已停止。
 
 ## 数据与 Shell
 
@@ -27,7 +27,7 @@ $env:AGENT_TERMINAL_BASH = 'C:\Program Files\Git\bin\bash.exe'
 pnpm start
 ```
 
-默认 `shell=gitbash`，显式支持 `pwsh` 和 Windows `cmd`，不按命令内容自动转换语法。pwsh 需要单独安装。Git Bash 使用 `--noprofile --norc`，普通任务另加 `-c`；不继承用户 shell 初始化脚本。runtime 设置 pager 为 cat、UTF-8 与 `MSYS_NO_PATHCONV=1`。Git Bash 不等于完整 Linux 环境。
+默认 `shell=gitbash`，显式支持 `pwsh` 和 Windows `cmd`，不按命令内容自动转换语法。pwsh 优先 PowerShell 7，缺失时回退 Windows PowerShell。Git Bash 使用 `--noprofile --norc`，普通任务另加 `-c`；不继承用户 shell 初始化脚本。runtime 设置 pager 为 cat、UTF-8 与 `MSYS_NO_PATHCONV=1`。Git Bash 不等于完整 Linux 环境。
 
 MCP 的 `cwd` 未填写时由 MCP 进程的 `process.cwd()` 传给 runtime，即通常为启动该 MCP 的 Agent 工作目录；显式 `cwd` 优先。直接 HTTP 提交未设置 cwd 时则用 runtime 的工作目录。最新隔离用户级安装器实测中，两款真实 Agent 的任务 cwd 均为临时项目目录，已确认该默认行为。
 
@@ -53,13 +53,13 @@ pnpm cli kill TASK_ID
 pnpm cli write TASK_ID "hello`n"
 ```
 
-## 两个 UI 窗口
+## 桌面窗口与界面
 
-配置中心：选择 prefer / audit / strict 后点击“一键接入”或“应用模式”，管理 MCP、Hooks、全局说明与 Skill；可以预览配置、卸载接入，切换 Codex / Claude Code 分别设置本机 provider。
+配置中心：选择 prefer / audit / strict 后点击“一键接入”或“应用模式”，管理 MCP、Hooks、全局说明与 Skill；可以预览配置、卸载接入、设置默认 Shell 与路径。Provider 不在管理范围。
 
 监控与统计：展示近期任务、按 Agent/运行状态过滤及命令/目录/ID 搜索；xterm.js 显示终端输出，运行中可输入、调整终端大小、终止任务；显示累计任务、运行中数量、失败、Hook 数量以及 Agent / Shell 分组耗时统计。
 
-“独立打开…”会另开配置或监控窗口；浏览器用新窗口，Tauri 用独立 WebviewWindow，均连接同一 runtime。窗口角色通过 `?window=config` / `?window=monitor` 区分，浏览器连接 token 仍需保留在 URL fragment。
+桌面只打开一个 main 窗口，配置与监控通过 Tab 切换；顶部按钮管理服务生命周期。关闭窗口默认保留后台执行，完全退出才停止服务。
 
 浏览器使用 runtime 自带静态资源最直接。`pnpm dev:ui` 仅启动 Vite，不启动 backend；先启动 runtime，再启动 Vite，使用 `http://localhost:1420/#token=实际token`。Vite 在启动时读取相同 home 的 connection.json 作为 `/api` 代理目标，也可设置 `AGENT_TERMINAL_RUNTIME_URL`，缺省兜底为端口 4317；runtime 换端口后需重启 Vite。
 

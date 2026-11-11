@@ -3,12 +3,13 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { Engine } from './engine.js';
 import { dataHome } from './client.js';
 import { getConfiguration, previewIntegration, installIntegration, uninstallIntegration, toggleSkill } from '../../installer/src/index.js';
 import { shellConfiguration, saveShellSettings } from './settings.js';
 
-export async function startRuntime(home = dataHome()) {
+export async function startRuntime(home = dataHome(), options: { port?: number; token?: string; onStopped?: ()=>void } = {}) {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const lockPath = path.join(home, 'runtime.lock');
   try { const lock = openSync(lockPath, 'wx', 0o600); writeFileSync(lock, String(process.pid)); closeSync(lock); }
@@ -20,7 +21,8 @@ export async function startRuntime(home = dataHome()) {
     const lock = openSync(lockPath, 'wx', 0o600); writeFileSync(lock, String(process.pid)); closeSync(lock);
   }
   const engine = new Engine(home);
-  const token = randomBytes(32).toString('hex');
+  const token = options.token || randomBytes(32).toString('hex');
+  let controlling: 'stop' | 'restart' | undefined;
   const streams = new Set<http.ServerResponse>();
   const builtUi = fileURLToPath(new URL('../../../../apps/ui/dist/', import.meta.url));
   const uiRoot = existsSync(builtUi) ? builtUi : fileURLToPath(new URL('../../../apps/ui/dist/', import.meta.url));
@@ -49,7 +51,24 @@ export async function startRuntime(home = dataHome()) {
     try {
       const method = request.method;
       const route = url.pathname;
-      if (route === '/api/health') return send({ ok: true, version: '0.1.0' });
+      if (route === '/api/health') return send({ ok: true, version: '0.1.0', lifecycle: true, stopping: Boolean(controlling), pid: process.pid });
+      if (route === '/api/control/stop' && method === 'POST') {
+        await body(request);
+        if(controlling==='stop')return send({error:'Runtime 正在停止'},409);
+        controlling='stop';
+        response.once('finish',()=>{void close().then(()=>options.onStopped?.()).catch(error=>console.error(error));});
+        return send({ok:true});
+      }
+      if (route === '/api/control/restart' && method === 'POST') {
+        await body(request);
+        if(controlling)return send({error:'Runtime 正在重启'},409);
+        controlling='restart';
+        const child=spawn(process.execPath,[fileURLToPath(new URL('./service.js',import.meta.url)),'restart'],{env:{...process.env,AGENT_TERMINAL_HOME:home},detached:true,windowsHide:true,stdio:'ignore'});
+        child.on('error',error=>{controlling=undefined;console.error(error);});
+        child.unref();
+        return send({ok:true});
+      }
+      if(controlling && method==='POST' && route!=='/api/hooks')return send({error:'Runtime 正在停止或重启'},409);
       if (route === '/api/tasks' && method === 'GET') return send(engine.list());
       if (route === '/api/tasks' && method === 'POST') return send(engine.start(await body(request)), 201);
       const task = route.match(/^\/api\/tasks\/([^/]+)(?:\/(output|input|kill|resize|usage))?$/);
@@ -87,7 +106,7 @@ export async function startRuntime(home = dataHome()) {
     } catch (error) { send({ error: (error as Error).message }, 400); }
   });
   engine.on('event', event => { for (const stream of streams) { if (stream.writableLength > 1024 * 1024) { stream.end(); streams.delete(stream); } else stream.write(`data: ${JSON.stringify(event)}\n\n`); } });
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(options.port || 0, '127.0.0.1', resolve); });
   const address = server.address() as import('node:net').AddressInfo;
   const info = { url: `http://127.0.0.1:${address.port}`, token, pid: process.pid };
   writeFileSync(path.join(home, 'connection.json'), JSON.stringify(info), {mode:0o600});
@@ -96,6 +115,7 @@ export async function startRuntime(home = dataHome()) {
     for (const stream of streams) stream.end();
     const stopped = new Promise<void>(resolve => server.close(()=>resolve()));
     await engine.close();
+    server.closeAllConnections();
     await stopped;
     engine.db.close();
     if (existsSync(lockPath)) unlinkSync(lockPath);
@@ -105,7 +125,9 @@ export async function startRuntime(home = dataHome()) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const runtime = await startRuntime();
+  const runtime = await startRuntime(dataHome(), {port:Number(process.env.AGENT_TERMINAL_RESTART_PORT)||undefined,token:process.env.AGENT_TERMINAL_RESTART_TOKEN||undefined,onStopped:()=>process.exit(0)});
+  delete process.env.AGENT_TERMINAL_RESTART_TOKEN;
+  delete process.env.AGENT_TERMINAL_RESTART_PORT;
   console.log(`AgentTerminal ready: ${runtime.info.url}/#token=${runtime.info.token}`);
   for (const signal of ['SIGINT','SIGTERM'] as const) process.on(signal, () => { void runtime.close().then(()=>process.exit(0)); });
 }

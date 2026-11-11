@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { isTauri } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Activity, Check, ChevronRight, Circle, Command, Cpu, Download, Layers, LoaderCircle, Plug, RefreshCw, Search, Settings2, ShieldCheck, SquareTerminal, X, Zap } from 'lucide-react';
 import { Api, active, connect, enabled, type Agent, type Config, type Mode, type Stats, type Task, type Shell } from './api';
@@ -23,6 +23,8 @@ export function App() {
   const [notice, setNotice] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [pinned, setPinned] = useState(false);
+  const [lifecycle, setLifecycle] = useState('');
+  const [stopped, setStopped] = useState(false);
   const report = useCallback((e: unknown) => setError(e instanceof Error ? e.message : String(e)), []);
   useEffect(() => { let cancelled = false; setError(''); setApi(undefined); connect().then(c => { if (!cancelled) setApi(new Api(c)); }).catch(e => { if (!cancelled) report(e); }); return () => { cancelled = true; }; }, [attempt, report]);
   const refresh = useCallback(async () => {
@@ -30,7 +32,32 @@ export function App() {
     const [c, t, s] = await Promise.all([api.request<Config>('/api/config'), api.tasks(), api.request<Stats>('/api/stats')]);
     setConfig(c); setTasks(t); setStats(s); setOnline(true);
   }, [api]);
-  useEffect(() => { let stopped = false; let timer: ReturnType<typeof setTimeout>; async function poll() { try { await refresh(); } catch (e) { if (!stopped) { setOnline(false); report(e); } } if (!stopped) timer = setTimeout(poll, 2500); } if (api) void poll(); return () => { stopped = true; clearTimeout(timer); }; }, [api, refresh, report]);
+  useEffect(() => { let disposed = false; let timer: ReturnType<typeof setTimeout>; async function poll() { try { await refresh(); } catch (e) { if (!disposed) { setOnline(false); report(e); } } if (!disposed) timer = setTimeout(poll, 2500); } if (api && !lifecycle && !stopped) void poll(); return () => { disposed = true; clearTimeout(timer); }; }, [api, refresh, report, lifecycle, stopped]);
+  async function control(command: 'stop' | 'restart') {
+    if(lifecycle || !api)return;
+    if(tasks.some(active) && !window.confirm(`${command==='stop'?'完全退出':'重启服务'}会终止正在运行的任务，是否继续？`))return;
+    setLifecycle(command); setError(''); setNotice('');
+    try {
+      if(isTauri()) {
+        await invoke('service_control',{action:command});
+        if(command==='restart'){setAttempt(value=>value+1);setNotice('后台服务已重启');}
+      } else {
+        await api.request(`/api/control/${command}`,{});
+        if(command==='stop'){setStopped(true);setOnline(false);setNotice('后台服务已停止，可以关闭此页面。重新启动请运行 pnpm start。');}
+        else {
+          const deadline=Date.now()+45000;
+          await new Promise(resolve=>setTimeout(resolve,1000));
+          let ready=false;
+          while(Date.now()<deadline) {
+            try { const health=await api.request<{ok:boolean;stopping?:boolean}>('/api/health',undefined,AbortSignal.timeout(1500)); if(health.ok&&!health.stopping){ready=true;break;} }catch{}
+            await new Promise(resolve=>setTimeout(resolve,300));
+          }
+          if(!ready)throw new Error('重启尚未完成，请运行 pnpm start 查看服务状态');
+          await refresh();setNotice('后台服务已重启');
+        }
+      }
+    }catch(error){report(error);}finally{setLifecycle('');}
+  }
   async function action(key: string, path: string, body: unknown) {
     if (!api || busy) return;
     setBusy(key); setError(''); setNotice('');
@@ -42,11 +69,11 @@ export function App() {
       <div className="sidebar-note"><div className="tiny-icon"><Layers size={18}/></div><strong>让每次执行都有迹可循</strong><p>连接你的 Coding Agent，<br/>在同一个地方掌握命令与输出。</p></div>
       <div className="runtime"><span className={`dot ${online ? 'green' : ''}`}/><div><strong>{online ? 'Runtime 已连接' : '等待 Runtime'}</strong><small>{online ? '本地服务 · 自动同步' : '检查连接与令牌'}</small></div><span className="version">v0.1</span></div>
     </aside>
-    <main><header className="topbar"><span>工作空间 <ChevronRight size={14}/> <b>{page === 'config' ? '配置中心' : '实时监控'}</b></span></header>
+    <main><header className="topbar"><span>工作空间 <ChevronRight size={14}/> <b>{page === 'config' ? '配置中心' : '实时监控'}</b></span><div><button className="button" disabled={!api || !!lifecycle || stopped} onClick={()=>void control('restart')}>{lifecycle==='restart'?'重启中…':'重启服务'}</button> <button className="button danger" disabled={!api || !!lifecycle || stopped} onClick={()=>void control('stop')}>{lifecycle==='stop'?'退出中…':'完全退出'}</button></div></header>
       <div className="content"><div className="page-heading"><div><div className="eyebrow">{page === 'config' ? 'WORKSPACE SETTINGS' : 'LIVE OBSERVABILITY'}</div><h1>{page === 'config' ? '配置你的 Agent 工作流' : '每一条命令，尽在眼前'}</h1><p>{page === 'config' ? '配置 Agent 接入与本机 Shell；模型与 Provider 由外部工具管理。' : '实时查看执行状态、终端输出与跨 Agent 的运行统计。'}</p></div><div className="heading-actions">{page === 'monitor' && isTauri() && <button className={`button ${pinned ? 'primary' : ''}`} aria-pressed={pinned} onClick={() => { void getCurrentWindow().setAlwaysOnTop(!pinned).then(() => setPinned(!pinned)).catch(report); }}>{pinned ? '取消置顶' : '窗口置顶'}</button>}<button className="button" onClick={() => { if (api) void refresh().catch(report); else setAttempt(v => v + 1); }}><RefreshCw size={15}/>刷新状态</button></div></div>
       {error && <div className="alert" role="alert"><span>{error}</span><button aria-label="关闭错误" onClick={() => setError('')}><X size={16}/></button></div>}
       {notice && <div className="notice" role="status"><Check size={16}/>{notice}<button aria-label="关闭提示" onClick={() => setNotice('')}><X size={16}/></button></div>}
-      {!config || !api ? <div className="empty panel"><Plug size={32}/><h2>{error ? '暂时无法连接' : '正在连接本地工作空间'}</h2><p>桌面端自动发现 Runtime；浏览器请使用带连接令牌的地址。</p><button className="button" onClick={() => setAttempt(v => v + 1)}>重新连接</button></div> : page === 'config' ? <ConfigPage api={api} config={config} busy={busy} action={action} report={report}/> : <Monitor api={api} tasks={tasks} stats={stats} busy={busy} action={action} report={report}/>}
+      {lifecycle || stopped ? <div className="empty panel"><h2>{stopped ? '后台服务已停止' : lifecycle === 'restart' ? '正在重启后台服务' : '正在完全退出'}</h2><p>{stopped ? '可以关闭此页面，重新启动请运行 pnpm start。' : '正在结束任务并保存状态，请稍候。'}</p></div> : !config || !api ? <div className="empty panel"><Plug size={32}/><h2>{error ? '暂时无法连接' : '正在连接本地工作空间'}</h2><p>桌面端自动发现 Runtime；浏览器请使用带连接令牌的地址。</p><button className="button" onClick={() => setAttempt(v => v + 1)}>重新连接</button></div> : page === 'config' ? <ConfigPage api={api} config={config} busy={busy} action={action} report={report}/> : <Monitor api={api} tasks={tasks} stats={stats} busy={busy} action={action} report={report}/>}
       <footer><span><ShieldCheck size={13}/>本地工作空间 · 令牌认证</span><span>Agent Terminal / {page === 'config' ? 'Configuration' : 'Monitor'}</span></footer></div>
     </main>
   </div>;
