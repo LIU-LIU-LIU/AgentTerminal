@@ -13,7 +13,9 @@
 | Codex 经 MCP 调用 Git Bash | 通过 |
 | Codex 原生命令 | 走 `pwsh -Command`,不经 MCP,需 hook 拦截 |
 | Codex PreToolUse hook(项目级 `.codex/hooks.json`) | 收到 `tool_name=Bash` 与命令;返回 deny 后命令被阻止,原因回传模型 |
-| Claude Code 无头 `claude -p` | 未验证:简单请求也无输出直至超时,疑似网关/认证问题 |
+| Claude Code 无头 `claude -p` | 默认请求超时(网关直连 200 正常);设 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` 后 3-5 秒正常返回 |
+| Claude 经 MCP 调用 Git Bash | 通过,返回 `MINGW64_NT`,exit 0 |
+| Claude PreToolUse hook | 通过。原生 `Bash` 被 deny,原因回传模型;hook 同时收到 `mcp__agentterm__terminal_run`,可区分 MCP 与原生调用。deny 输出格式与 Codex 相同(`hookSpecificOutput.permissionDecision=deny`) |
 | Tabby + MCP | 未实测;插件依赖 Angular 15 与 Tabby 内部 API,SSE 传输 |
 
 ## 选型
@@ -26,5 +28,8 @@
 - `research/codex-hook.js`:放入项目级 `.codex/hooks.json` 的 PreToolUse 命令中。
 
 ## 待办风险
-- Claude 无头模式需在 M2 前单独排查。
-- Claude PreToolUse 的 deny 输出格式需在 M3 核实。
+- Claude 运行 runtime 相关测试时需带 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`(安装器可写入 settings 的 env)。
+- 尚未测试:两个 Agent 并发写入同一 runtime;当前 smart-terminal-mcp 是每个 Agent 一个进程,无法共享会话,需自研 runtime 解决。
+- Claude 模型曾把 MCP 工具名说成 `mcp__local__...`,以 hook 记录的真实 tool_name 为准。
+- 用户级 hooks(`~/.codex/hooks.json`、`~/.claude/settings.json`)未实测,仅测了项目级与 `--settings`。
+
