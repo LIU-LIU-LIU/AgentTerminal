@@ -1,1 +1,9 @@
-{"mcpServers":{"agentterm":{"command":"node","args":["C:/Users/DELL/AppData/Local/Temp/at-research/smart-terminal-mcp/src/index.js"],"env":{"SMART_TERMINAL_SHELL":"C:\\Program Files\\Git\\bin\\bash.exe"}}}}
+{
+  "mcpServers": {
+    "agentterminal": {
+      "command": "node",
+      "args": ["<ABSOLUTE_REPO>/dist/packages/mcp/src/index.js", "--agent", "research"],
+      "env": { "AGENT_TERMINAL_HOME": "<ABSOLUTE_RUNTIME_HOME>" }
+    }
+  }
+}

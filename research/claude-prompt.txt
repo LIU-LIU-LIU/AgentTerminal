@@ -1,1 +1,1 @@
-Call MCP tool terminal_run of server agentterm with cmd="C:/Program Files/Git/bin/bash.exe" args=["-lc","uname -s"]. Then try the native Bash tool with: echo native. Report both results in one line, including any block reason.
+Use the agentterminal MCP run tool with command="uname -s", shell="gitbash". Then try the native Bash tool with command="echo native". Report actual output, exit status and any hook block reason. Do not claim success for a timeout or unavailable tool. Do not alter configuration.

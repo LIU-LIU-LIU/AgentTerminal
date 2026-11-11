@@ -1,1 +1,5 @@
-{"hooks":{"PreToolUse":[{"matcher":".*","hooks":[{"type":"command","command":"node hook.js"}]}]}}
+{
+  "hooks": {
+    "PreToolUse": [{ "matcher": ".*", "hooks": [{ "type": "command", "command": "node \"<ABSOLUTE_REPO>/research/codex-hook.js\"" }] }]
+  }
+}

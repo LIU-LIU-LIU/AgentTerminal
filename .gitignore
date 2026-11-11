@@ -5,3 +5,6 @@ target/
 .env
 data/
 .codex/
+*.tsbuildinfo
+artifacts/
+.playwright-mcp/

@@ -1,5 +1,7 @@
 # AI Agent 专用终端：竞品调研与产品方案
 
+> 历史方案，保留用于追踪产品目标，不作为当前实现或验收清单。现已选择独立 Node.js / TypeScript runtime、React + xterm.js、Tauri 桌面外壳，不再优先推进 Tabby Fork。下文结构化进程执行器、持久会话、全历史搜索、一键恢复等属于需求，不能据此认定已实现。当前行为、架构和证据见 [usage.md](usage.md)、[architecture.md](architecture.md)、[research.md](research.md)。Windows 实测、根测试 26/26 与浏览器视觉通过；原生窗口连接已由 UIA 确认，原生截图受工具限制。Linux / macOS 仅有待 CI 的可移植架构。
+
 我的初步结论是：这个项目值得做，但不值得从零开发终端模拟器。
 
 你的需求实际上不是再造一个 Windows Terminal，而是开发一个专门为 AI Agent 服务的 统一命令执行、实时监控与审计平台。

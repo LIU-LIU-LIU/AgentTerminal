@@ -1,3 +1,12 @@
-export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
-timeout 120 claude -p "$(cat prompt.txt)" --mcp-config mcp.json --settings claude-hooks.json --permission-mode bypassPermissions </dev/null 2>&1 | tail -8
-echo ---; cut -c1-300 hook.log
+#!/usr/bin/env bash
+set -euo pipefail
+research_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_dir="$(cd -- "$research_dir/.." && pwd)"
+cd -- "$repo_dir"
+: "${AGENT_TERMINAL_HOME:?Set an absolute disposable runtime home and start pnpm start there first}"
+# Environment workarounds are caller opt-in. No global settings are changed.
+node "$research_dir/prepare-config.mjs"
+claude -p "$(cat "$research_dir/claude-prompt.txt")" \
+  --mcp-config "$AGENT_TERMINAL_HOME/research-mcp.json" \
+  --settings "$AGENT_TERMINAL_HOME/research-claude-hooks.json" \
+  --permission-mode default </dev/null

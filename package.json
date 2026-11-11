@@ -1,0 +1,23 @@
+{
+  "name": "agentterminal", "version": "0.1.0", "private": true, "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && pnpm --dir apps/ui build",
+    "build:backend": "tsc -p tsconfig.json",
+    "start": "node dist/packages/runtime/src/index.js",
+    "cli": "node dist/packages/runtime/src/cli.js",
+    "test": "tsx --test tests/*.test.ts",
+    "dev:ui": "pnpm --dir apps/ui dev",
+    "desktop": "pnpm --dir apps/ui tauri dev",
+    "desktop:build": "pnpm build && pnpm --dir apps/ui tauri build --no-bundle",
+    "package:portable": "node scripts/package-portable.mjs"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5", "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.4.1", "node-pty": "^1.1.0", "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13", "@types/node": "^22.0.0", "tsx": "^4.20.0", "typescript": "^5.9.0"
+  },
+  "pnpm": { "onlyBuiltDependencies": ["better-sqlite3", "node-pty", "esbuild"] }
+}
