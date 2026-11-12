@@ -5,9 +5,8 @@
 
 面向 AI 编程 Agent 的本地终端管理工具。通过 MCP 统一执行命令，在同一窗口中查看多个 Agent 的终端输出、任务状态和运行统计。
 
-[![AgentTerminal 演示](docs/media/agentterminal-demo.gif)](docs/media/agentterminal-demo.mp4)
+[![AgentTerminal 概念短片](docs/media/agentterminal-concept.gif)](docs/media/agentterminal-concept.mp4)
 
-<sub>49 秒功能演示，点击查看 [高清 MP4](docs/media/agentterminal-demo.mp4)。</sub>
 
 目前仅适配 [Codex](https://github.com/openai/codex) 和 [Claude Code](https://github.com/anthropics/claude-code)。[Gemini CLI](https://github.com/google-gemini/gemini-cli)、[Grok](https://grok.com)、[OpenCode](https://github.com/anomalyco/opencode)、[OpenClaw](https://github.com/openclaw/openclaw)、[Hermes Agent](https://github.com/NousResearch/hermes-agent)、[Pi](https://github.com/earendil-works/pi)、[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 和腾讯 [WorkBuddy](https://www.workbuddy.cn/) 均尚未适配，不能视为已支持。
 
