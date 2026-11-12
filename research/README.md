@@ -32,6 +32,8 @@ bash research/claude-e2e.sh
 
 ## 真实双 Agent 研究
 
+CI 排查：`node research/inspect-ci.mjs [RUN_ID]` 读取 GitHub Actions 各平台日志并保存到临时目录，不修改远端配置；`node research/pty-smoke.mjs` 在构建后执行真实 PTY 输出 / exit 7 冒烟检查。Linux 隔离验证可在 WSL / Linux x64 运行 `bash research/linux-ci-smoke.sh`，会在临时目录下载 Node、安装依赖并运行构建与全部测试，不复用 Windows 原生模块。macOS 专用回归会模拟 node-pty 打包缺失执行权限，检查 Runtime 自动修复并正确保留非零退出码。
+
 本轮新增：`node research/ui-current-smoke.mjs` 启动独立临时配置 / Runtime 并创建示例任务，用于浏览器验证 Shell 配置与 Token 估算；Ctrl+C 关闭。`node research/github-repository.mjs` 非交互检查现有 GitHub 凭据权限，不输出凭据；`--apply` 更新仓库简介 / topics。
 
 主流程提供的 `node research/agents-live.mjs` 会新建临时目录和自己的 runtime，再并行启动真实 Codex / Claude，生成 `<临时目录>/report.json`。它与上面的外部 runtime smoke 是不同生命周期。可用 `AGENT_TERMINAL_CODEX` 指定 Codex 可执行文件、`AGENT_TERMINAL_CLAUDE_ENTRY` 指定 Claude Node 入口；需先检查当前脚本及已安装 CLI 版本。

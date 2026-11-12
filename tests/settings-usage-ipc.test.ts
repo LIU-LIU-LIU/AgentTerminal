@@ -33,6 +33,19 @@ test('fatal IPC failure settles pending drain and stops sending', async () => {
   assert.equal(failed,1);
 });
 
+test('IPC backlog is bounded and overflow fails explicitly', async () => {
+  let failure: Error | undefined;
+  let complete: ((error?: NodeJS.ErrnoException | null)=>void) | undefined;
+  const channel=new ReliableChannel((_message,callback)=>{complete=callback;},()=>{},()=>{},error=>{failure=error;});
+  channel.push({data:'pending'});
+  const drained=channel.idle();
+  for(let index=0;index<65;index++)channel.push({data:'x'.repeat(1024*1024)});
+  await drained;
+  assert.match(failure!.message,/backlog exceeded 64 MiB/);
+  complete!();
+  await channel.idle();
+});
+
 test('text estimates ignore ANSI and distinguish CJK from Latin', () => {
   assert.equal(tokenWeight('\u001b[31mhello world\u001b[0m'),2.75);
   assert.equal(tokenWeight('你好世界'),4);
@@ -50,9 +63,10 @@ test('saved shell default executes locally, explicit override wins, usage surviv
   const override=engine.start({command:'echo bash-ok',shell:'gitbash'});
   const deadline=Date.now()+20000;
   while(engine.list().some(t=>t.status==='running')&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,50));
-  assert.equal(engine.get(task.task_id).status,'ok');
+  assert.equal(engine.get(task.task_id).status,'ok',engine.output(task.task_id).output);
   assert.equal(engine.get(task.task_id).shell,preferred);
   assert.equal(engine.get(override.task_id).shell,'gitbash');
+  assert.equal(engine.get(override.task_id).status,'ok',engine.output(override.task_id).output);
   assert.match(engine.output(task.task_id).output,/shell-ok/);
   const usage=engine.usage(task.task_id);
   assert(usage.input_tokens!>0); assert(usage.output_tokens>0); assert.equal(usage.estimated,true);

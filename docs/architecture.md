@@ -24,4 +24,8 @@ helper 使用 Windows ConPTY，取消时对 PTY PID 调用系统 `taskkill.exe /
 
 ## ADR-004：背压与统计边界
 
-PTY helper 的 IPC 消息串行发送，高水位暂停 PTY 读取、低水位恢复；EAGAIN / ENOBUFS 延迟重试，致命失败结束任务。避免无限并发写 IPC。每任务存终端文本 Token 估算，明确不等于模型上下文或计费用量。Shell 默认值与路径持久化到 runtime home 的 shell.json，显式 MCP 参数优先。
+PTY helper 的 IPC 消息串行发送；Windows 高水位暂停 PTY 读取、低水位恢复。Unix 保持连续读取，避免 node-pty 在暂停期间命令结束时丢失末尾输出。队列序列化大小上限 64 MiB，以容纳一次 32 MiB 保留日志规模的突发及协议开销；溢出明确记录错误并将任务标记为 abnormal，不伪报输出完整或任务成功。此上限不等于进程 RSS 上限，并发大输出仍有内存成本。EAGAIN / ENOBUFS 延迟重试，致命失败结束任务。每任务存终端文本 Token 估算，明确不等于模型上下文或计费用量。Shell 默认值与路径持久化到 runtime home 的 shell.json，显式 MCP 参数优先。
+
+## ADR-005：macOS node-pty 启动辅助程序
+
+node-pty 1.1.0 发布包的 darwin-arm64 / darwin-x64 spawn-helper 文件 mode 为 0644，macOS 使用 posix_spawn 启动它时失败。PTY helper 启动前通过 node-pty 的 native loader 获取实际加载的二进制目录，补齐配套 spawn-helper 的执行位。只在 macOS 执行，支持预编译与源码构建目录；权限不足时保留明确路径错误，不静默忽略。该适配使用 node-pty 内部 loader，升级依赖时必须运行专用回归。

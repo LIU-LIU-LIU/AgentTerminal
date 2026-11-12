@@ -97,12 +97,22 @@ test('paginates more than 64 KiB of Unicode without lost bytes', async t => {
   const task = engine.start({ command: "for ((i=0;i<3000;i++)); do printf '你好🙂abcdefghijklmnopqrstuvwxyz0123456789\\n'; done" });
   assert.equal((await finished(engine, task.task_id)).status, 'ok');
   const result = drain(engine, task.task_id);
-  assert.ok(result.pages >= 3);
+  assert.ok(result.pages >= 3, `pages=${result.pages}, bytes=${Buffer.byteLength(result.output)}, matches=${(result.output.match(/你好🙂abcdefghijklmnopqrstuvwxyz0123456789/g) || []).length}`);
   assert.equal((result.output.match(/你好🙂abcdefghijklmnopqrstuvwxyz0123456789/g) || []).length, 3000);
   assert.doesNotMatch(result.output, /\uFFFD/);
   assert.equal(engine.output(task.task_id, result.offset).output, '');
   assert.throws(() => engine.output(task.task_id, result.offset + 1), /Invalid offset/);
   assert.throws(() => engine.output(task.task_id, -1), /Invalid offset/);
+});
+
+test('POSIX retains the entire final output burst across repeated tasks', {skip:process.platform==='win32'}, async t => {
+  const { engine } = fixture(t);
+  for(let attempt=0;attempt<10;attempt++) {
+    const task=engine.start({command:"for ((i=0;i<3000;i++)); do printf '你好🙂abcdefghijklmnopqrstuvwxyz0123456789\\n'; done"});
+    assert.equal((await finished(engine,task.task_id)).status,'ok');
+    const output=drain(engine,task.task_id).output;
+    assert.equal((output.match(/你好🙂abcdefghijklmnopqrstuvwxyz0123456789/g)||[]).length,3000,`output lost in burst ${attempt}`);
+  }
 });
 
 test('caps logs and withholds overlong unterminated secrets', async t => {

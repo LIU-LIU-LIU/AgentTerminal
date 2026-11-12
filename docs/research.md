@@ -1,5 +1,17 @@
 # 调研与实测证据（2026-11-11）
 
+## 2026-11-12：首次三平台 CI 失败排查
+
+读取 [Actions run 43018188715](https://github.com/LIU-LIU-LIU/AgentTerminal/actions/runs/43018188715) 的全部平台日志，提交为 `02ce0fa`。macOS job 有 10 个失败，多个任务输出包含 `posix_spawnp failed.`；Windows、Ubuntu 的结论为 cancelled，是矩阵默认 fail-fast 在 macOS 失败后取消其他任务，并非 Windows 日志已证明卡死。
+
+直接下载 npm 的 node-pty 1.1.0 发布 tarball 检查：`prebuilds/darwin-arm64/spawn-helper` 和 `prebuilds/darwin-x64/spawn-helper` 均为 mode 0644。macOS 的 node-pty 原生模块通过 posix_spawn 执行该辅助程序，缺少执行位会在 Shell 启动前失败。Runtime 现在查找实际加载二进制的配套 helper 并补齐执行位；专用 macOS 测试模拟 0644 后执行任务，验证输出和 exit 7。补权限失败会报告具体路径，不伪造任务成功。此 macOS 回归仍需远端 runner 执行，本机 Windows / Linux 不代替 macOS 验收。
+
+Linux WSL 隔离安装后又复现间歇性末尾输出丢失：3000 行 Unicode 有时仅保留 2722 / 2729 行。对照直接 node-pty 持续读取为 3000 行；禁用 Unix socket pause 后连续 20 次检查通过。Unix 现在持续读取，IPC 队列保持串行和 64 MiB 序列化大小上限，超过上限明确失败；Windows 保留 pause / resume。上限容纳 32 MiB 保留日志规模的突发和消息开销，不代表 RSS 上限。额外 POSIX 回归连续执行 10 个突发任务验证末尾不丢失。
+
+验证记录：Windows 完整后端 32 通过 / 1 macOS 专用项跳过，UI 4/4；最后调整队列上限后受影响的 helper / IPC / Shell 测试 6 通过 / 1 跳过。Ubuntu 22.04 WSL（独立 Linux Node 22.17.0、pnpm 10.33.0、全新原生依赖）完整构建通过，后端 32 通过 / 1 macOS 专用项跳过，UI 4/4；新增 POSIX 十次突发回归单独通过。保留原 3000 行完整性断言，没有通过减少输出或放宽断言规避失败。
+
+工作流增加 `fail-fast: false`、15 分钟 job 上限与独立真实 PTY 冒烟步骤，让平台各自给出完整结果。复现工具见 research/README.md；WSL 只在 /var/tmp 创建隔离目录，未改系统 Node 或 Windows node_modules。本轮没有推送或重新触发远端 CI，不宣称 Actions 已全绿。
+
 后续修改以 [current-status.md](current-status.md) 为准：Provider 功能已移除，桌面改为单窗口 Tab，新增 Shell 配置与终端 Token 估算；本轮后端回归 28/28。下文双窗口与 Provider 是历史记录，不代表当前产品范围。
 
 本页区分源码事实、历史研究、真实 Agent 报告与验证边界。根测试 26/26、runtime reviewer 11/11、生产构建均通过。UIA 已确认两个原生桌面窗口均显示 Runtime 已连接，包内 Node runtime 自动启动及 GUI 退出后重连已确认；浏览器视觉通过，原生截图受工具环境限制。

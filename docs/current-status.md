@@ -1,5 +1,9 @@
 # 当前完成状态（2026-11-11）
 
+## 2026-11-12 CI 修订
+
+修复 macOS node-pty 发布包辅助程序缺少执行权限、Unix 暂停读取时末尾输出丢失；新增权限 / 突发输出 / IPC 积压回归与 PTY 冒烟步骤。CI 禁用矩阵 fail-fast，Windows 和 Ubuntu 不再因其他平台失败连带取消。Windows 与 Ubuntu WSL 本地构建和测试通过，macOS 专用回归须推送后由 Actions 确认。详细根因与验证数字见 research.md 的 2026-11-12 记录。历史“Linux 尚无实测”由本轮 Runtime / Web UI 的 WSL 实测补充；这不代表 Linux 桌面打包或所有发行版已验收。
+
 ## 服务管理修订
 
 README 改为用户文档，移除研发过程、代码归属解释和内部调研导航。`pnpm start` 改为后台启动 / 健康实例复用，不再因正常已有实例而报错；新增 `pnpm stop` 与 `pnpm run restart`。使用 run restart 避免 pnpm 快捷生命周期额外执行 stop / start。

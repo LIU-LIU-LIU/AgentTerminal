@@ -1,13 +1,14 @@
 import * as pty from 'node-pty';
 import { killProcessTree } from './shell.js';
 import { ReliableChannel } from './ipc.js';
+import { preparePtyHelper } from './pty-helper.js';
 
 let terminal: pty.IPty | undefined;
 let stopping: Promise<void> | undefined;
 const channel=new ReliableChannel((message,callback)=>{
   if(!process.connected){callback(Object.assign(new Error('IPC disconnected'),{code:'ERR_IPC_CHANNEL_CLOSED'}));return;}
   process.send!(message,callback);
-},()=>{try{terminal?.pause();}catch{}},()=>{try{terminal?.resume();}catch{}},()=>{void stop(null,1);});
+},()=>{if(process.platform==='win32'){try{terminal?.pause();}catch{}}},()=>{if(process.platform==='win32'){try{terminal?.resume();}catch{}}},error=>{console.error(error.message);void stop(null,1);});
 process.on('error',error=>{if(!['EAGAIN','ENOBUFS'].includes((error as NodeJS.ErrnoException).code||''))void stop(null,1);});
 
 function send(message: object) {
@@ -31,6 +32,7 @@ function stop(exitCode: number | null, signal?: number, natural = false) {
 process.on('message', (message: any) => {
   if (message.type === 'start' && !terminal && !stopping) {
     try {
+      preparePtyHelper();
       terminal = pty.spawn(message.file, message.args, { ...message.options, useConptyDll: process.platform === 'win32' });
       send({ type: 'ready', pid: terminal.pid });
       terminal.onData(data => send({ type: 'data', data }));

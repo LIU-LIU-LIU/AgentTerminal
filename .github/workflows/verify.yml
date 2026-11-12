@@ -2,7 +2,9 @@ name: Verify
 on: [push, pull_request]
 jobs:
   test:
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
@@ -17,5 +19,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: node research/pty-smoke.mjs
       - run: pnpm test
       - run: pnpm --dir apps/ui test
