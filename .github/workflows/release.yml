@@ -22,6 +22,7 @@ jobs:
       contents: write
     outputs:
       tag: ${{ steps.version.outputs.tag }}
+      ready: ${{ steps.finalize.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,20 +72,37 @@ jobs:
             SHA256SUMS.txt
           if-no-files-found: error
       - name: Commit version and tag after successful build
+        id: finalize
         if: github.ref_type != 'tag'
         shell: bash
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
+          latest=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo 'A newer main commit exists; its queued build will publish instead.'
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json apps/ui/package.json apps/ui/src-tauri/tauri.conf.json apps/ui/src-tauri/Cargo.toml apps/ui/src-tauri/Cargo.lock
           if ! git diff --cached --quiet; then git commit -m "chore: release $RELEASE_TAG"; fi
           git tag "$RELEASE_TAG"
-          git push --atomic origin HEAD:refs/heads/main "refs/tags/$RELEASE_TAG"
+          if ! git push --atomic origin HEAD:refs/heads/main "refs/tags/$RELEASE_TAG"; then
+            latest=$(git ls-remote origin refs/heads/main | cut -f1)
+            if [[ "$latest" != "$GITHUB_SHA" ]]; then
+              echo 'Main advanced during the push; skipping this superseded release.'
+              echo 'ready=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            exit 1
+          fi
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
 
   publish:
     needs: package
+    if: github.ref_type == 'tag' || needs.package.outputs.ready == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
