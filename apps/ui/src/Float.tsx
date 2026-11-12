@@ -10,7 +10,7 @@ import { announce, lookVars, savePrefs, useLook, usePrefs, type TerminalLook } f
 import { FLOAT_IDLE_MS } from './streamPreview';
 
 // Logical pixels. PAD is the transparent margin that leaves room for the card shadow.
-const CARD_W = 372, CARD_H = 236, GAP = 10, PAD = 12, STRIP = 28, STRIP_H = 64, SNAP = 28;
+const CARD_W = 372, CARD_H = 236, GAP = 10, PAD = 12, STRIP = 20, STRIP_H = 60, SNAP = 28;
 const POSITION_KEY = 'agentterminal.float';
 const logicalWidth = (count: number) => count * CARD_W + (count - 1) * GAP + PAD * 2;
 

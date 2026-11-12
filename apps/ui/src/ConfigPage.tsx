@@ -5,7 +5,7 @@ import type { Action } from './App';
 import { agentName, shellName } from './labels';
 import { DEFAULT_PREFS, THEMES, lookVars, resolveLook, savePrefs, useAppearance, useIdeLook, useLook, usePrefs, type Prefs, type TerminalLook } from './themes';
 
-const modes: Record<Mode, [string, string]> = { prefer: ['优先使用', '通过 MCP 和 Skill 引导 Agent 使用统一终端。'], audit: ['审计增强', '增加 Hooks，记录受支持的原生工具调用。'], strict: ['严格接入', '通过受支持的 Hooks 拦截原生命令工具。'] };
+const modes: Record<Mode, [string, string]> = { prefer: ['优先使用', '通过 MCP 和 Skill 引导 Agent 使用统一终端。'], audit: ['审计增强', '仅记录原生调用，不拦截，也不接管其终端输出。'], strict: ['严格接入', '拦截 Bash、PowerShell 等原生命令，提示改用 MCP；需重启 Agent。'] };
 const shellIds: Shell[] = ['gitbash', 'pwsh', 'cmd'];
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (value: T) => void; label: string }) {

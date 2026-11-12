@@ -12,6 +12,18 @@
 
 与侧重 API Provider 切换和 Agent 配置管理的 [CC Switch](https://github.com/farion1231/cc-switch) 定位不同，AgentTerminal 仅统一管理终端执行、交互、监控与统计，不提供 Provider、模型或 API 密钥的管理与切换，可与这类工具配合使用。使用时在配置中心完成接入即可，无需另装 IDE 插件。
 
+接入与实测范围（Windows，2026-11-12）：
+
+| 客户端 | 接入状态 | 已完成验证与边界 |
+| --- | --- | --- |
+| Codex CLI | 已适配 | 本机 0.167.0-alpha.4.1：MCP → Git Bash、strict 拦截原生 Bash、安装与卸载恢复已实测 |
+| Claude Code CLI | 已适配 | 本机 1.0.84：用户级 MCP、strict 拦截原生 Bash并转用 MCP 成功 |
+| [Claude Code for VS Code](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code) | 共用 Claude 用户级 MCP / Hooks / Skill 接入 | 2.1.322：扩展日志确认 MCP 与 Hooks 已加载；扩展自带 claude.exe 实测原生 Bash 被拒绝、ToolSearch 发现工具、MCP 执行成功。尚未完成 VS Code 对话面板端到端验收 |
+| Codex 桌面端 / IDE 扩展、Claude Code for Cursor | 尚未单独验收 | 不将 CLI 测试视为这些客户端的完整兼容性证明 |
+| 上述其他 Agent | 未适配 | 尚无安装、Hooks 或真实命令联调保证 |
+
+Claude 的接入模式决定行为：`prefer` 只引导使用 MCP；`audit` 记录原生工具事件，不接管其终端输出；`strict` 拦截已识别的原生 Shell 工具并引导改用 MCP。只有实际通过 AgentTerminal 执行的命令才显示流式终端。Read、Grep、Glob、Edit 等文件工具不会生成终端任务。
+
 ## 功能
 
 - **终端监控**：实时输出、交互输入、退出码、任务取消和历史记录。
@@ -19,7 +31,7 @@
 - **Shell 配置**：默认使用本机 Git Bash，可切换 PowerShell 或 CMD，自定义可执行文件路径。
 - **运行统计**：按 Agent、Shell 和任务状态统计，支持 JSONL 导出及终端文本 Token 估算。
 - **服务管理**：重复启动自动复用，支持重启服务和完全退出。
-- **悬浮窗**：显示运行中命令、实时耗时与流式输出，后台长任务优先；无任务运行时自动折叠，鼠标移上展开；可拖动、贴边吸附，多个 Agent 同时工作时并排显示，双击回到监控。
+- **悬浮窗**：显示最新运行命令、实时耗时与流式输出；新命令结束后切回仍在运行的后台任务，无任务运行 10 秒后折叠为 20 × 60 小条，鼠标移上展开；可拖动、贴边吸附，多个 Agent 同时工作时并排显示，双击回到监控。
 - **终端外观**：默认跟随 VS Code / Cursor 等 IDE 的终端主题与字体，也可在配置中心选择内置配色、字号和光标样式。
 - **桌面窗口**：监控和配置两个 Tab，深色 / 浅色界面，可设置窗口置顶。
 
@@ -40,6 +52,8 @@ Linux 和 macOS 尚未完成兼容性验证。
 启动便携目录中的 `AgentTerminal.exe`，后台服务会自动启动。请保留整个目录。
 
 在“配置中心”选择默认 Shell 和接入模式，安装 Agent 接入，然后重启对应 Agent 以加载配置。
+
+Claude Code for VS Code 请安装 **Claude 接入**，需要统一执行命令时选择 `strict`。安装或更新后，在 VS Code 执行 **Developer: Reload Window**，再新建 Claude 对话，避免旧会话继续使用已缓存的工具与指令。工具采用延迟加载时，Agent 应先通过 ToolSearch 查找 `agentterminal`，再调用 `run` / `start`；可用“通过 AgentTerminal 执行 `printf terminal-test`”验证监控是否出现新任务。若仍无任务，先区分当前是文件操作、权限等待，还是 MCP 连接失败；详见[本机排查记录](docs/claude-local-diagnosis.md)。
 
 已发布的便携包可在 [Releases](https://github.com/LIU-LIU-LIU/AgentTerminal/releases) 中下载；若暂无版本，可按下文自行构建。解压完整目录后运行，不要只复制 exe。
 

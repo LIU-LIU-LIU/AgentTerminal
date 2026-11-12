@@ -1,5 +1,11 @@
 # 可复现研究与集成 smoke
 
+## Claude Code VS Code 扩展内核
+
+安装 Claude 接入、启动 runtime 后，在仓库根目录执行 `node research/claude-vscode-probe.mjs`。默认寻找本机 VS Code 最新的 Windows x64 Claude 扩展，也可传入其 `claude.exe` 绝对路径。脚本读取现有 user/project/local 设置，不修改 Provider；真实模型调用会消耗额度。需 strict 模式才能通过原生拦截断言。
+
+脚本只测试固定 printf 命令，允许相关 Bash 和 MCP 工具；120 秒超时记失败。验证原生 Bash 被拒绝、MCP 返回预期输出，原始结果保存在 Git 忽略的 `artifacts/`。此测试使用扩展自带的进程，不代替 VS Code 面板、审批交互或截图验收。本机 2.1.322 实测通过，详见 [Claude 排查记录](../docs/claude-local-diagnosis.md)。
+
 脚本按仓库位置定位编译入口，不依赖开发者用户名或硬编码临时目录。模板中的 `<ABSOLUTE_REPO>` / `<ABSOLUTE_RUNTIME_HOME>` 必须替换；可用生成器避免手工替换。所有结果只适用于实际执行环境，不代替跨平台 CI。
 
 ## 自有 runtime / HTTP / 双 MCP 客户端

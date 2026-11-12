@@ -42,8 +42,8 @@ export async function handleHook(event: HookEvent, options: HookOptions): Promis
     return {};
   }
   const tool = event.tool_name;
-  if (options.mode === 'strict' && event.hook_event_name === 'PreToolUse' && typeof tool === 'string' && ['Bash', 'shell', 'exec_command'].includes(tool)) {
-    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Use AgentTerminal MCP tools to execute shell commands.' } };
+  if (options.mode === 'strict' && event.hook_event_name === 'PreToolUse' && typeof tool === 'string' && ['Bash', 'PowerShell', 'powershell', 'pwsh', 'CMD', 'cmd', 'shell', 'exec_command'].includes(tool)) {
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Use AgentTerminal MCP tools to execute shell commands. If tools are deferred, use ToolSearch to discover agentterminal run/start/read/status, then retry through MCP. Native file tools such as Read/Grep/Edit remain available.' } };
   }
   return {};
 }

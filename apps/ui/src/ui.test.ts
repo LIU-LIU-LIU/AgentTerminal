@@ -90,7 +90,7 @@ describe('floating window layout', () => {
     expect(floatCards(tasks.slice(3), now)).toEqual([]);
     expect(floatCards([], now)).toEqual([]);
   });
-  it('keeps an hour-long background command visible after newer commands finish', () => {
+  it('focuses the latest running command then returns to background work when it finishes', () => {
     const now = Date.parse('2026-01-01T01:00:01Z');
     const background = { id: 'background', agent: 'codex', status: 'running', started_at: '2026-01-01T00:00:00Z' };
     const tasks = [
@@ -98,8 +98,9 @@ describe('floating window layout', () => {
       { id: 'new-running', agent: 'codex', status: 'running', started_at: '2026-01-01T00:59:00Z' },
       background,
     ];
-    expect(floatCards(tasks, now)).toEqual([background]);
-    expect(floatCards([...tasks].reverse(), now)).toEqual([background]);
+    expect(floatCards(tasks, now)).toEqual([tasks[1]]);
+    expect(floatCards([...tasks].reverse(), now)).toEqual([tasks[1]]);
+    expect(floatCards(tasks.map(task => task.id === 'new-running' ? { ...task, status: 'ok', ended_at: new Date(now).toISOString() } : task), now)).toEqual([background]);
     expect(taskDuration(background, now)).toBe(3601000);
     expect(taskDuration(background, now + 1000)).toBe(3602000);
     expect(formatDuration(taskDuration(background, now))).toBe('1 小时 0 分 1 秒');

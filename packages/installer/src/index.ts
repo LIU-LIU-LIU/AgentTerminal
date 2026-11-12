@@ -14,7 +14,7 @@ type State = { mode?: Mode; agents: Partial<Record<Agent, { mode: Mode; entries:
 
 const start = '<!-- agentterminal:start -->';
 const end = '<!-- agentterminal:end -->';
-const instructions = `${start}\nUse AgentTerminal MCP tools for shell commands, with Git Bash by default. Select PowerShell or CMD explicitly. For long-running commands, poll the existing task ID and incremental output; do not start duplicate commands. Never treat timeout or disconnection as success. Report MCP failures and follow the configured fallback policy.\n${end}`;
+const instructions = `${start}\nUse AgentTerminal MCP tools for shell commands, with Git Bash by default. Select PowerShell or CMD explicitly. If MCP tools are deferred, discover agentterminal run/start/read/status with ToolSearch before executing commands. Use native Read/Grep/Glob/Edit tools for file operations; those are not terminal tasks. For long-running commands, poll the existing task ID and incremental output; do not start duplicate commands. Never treat timeout or disconnection as success. Report MCP failures and follow the configured fallback policy.\n${end}`;
 const skill = '---\nname: agentterminal\ndescription: Execute and observe shell commands through AgentTerminal MCP.\n---\n\n' + instructions + '\n';
 
 function agentName(agent: Agent): void {

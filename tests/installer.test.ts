@@ -57,6 +57,9 @@ test('Claude uses user MCP JSON and restores collisions while preserving externa
   assert(!JSON.stringify(previewIntegration('claude', 'audit')).includes('private-token'));
   installIntegration('claude', 'audit');
   installIntegration('claude', 'strict');
+  const guide = readFileSync(join(s.claude, 'CLAUDE.md'), 'utf8');
+  assert.match(guide, /ToolSearch/);
+  assert.match(guide, /Read\/Grep\/Glob\/Edit/);
   const doc = JSON.parse(readFileSync(path, 'utf8'));
   doc.external = true;
   writeFileSync(path, JSON.stringify(doc));

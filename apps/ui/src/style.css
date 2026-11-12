@@ -224,8 +224,8 @@ html[data-view=float],html[data-view=float] body{background:transparent;overflow
 .float-root.native:active{cursor:grabbing}
 .float-root.popup{width:max-content;max-width:100vw;height:264px;gap:8px;padding:8px;background:#05070b}
 .float-root.popup .float-card{flex:none;width:372px}
-.float-root.popup.collapsed{width:28px;height:64px;padding:0;background:transparent}
-.float-root .float-strip{height:64px;top:0;bottom:auto;gap:5px}
+.float-root.popup.collapsed{width:20px;height:60px;padding:0;background:transparent}
+.float-root .float-strip{height:60px;top:0;bottom:auto;gap:5px}
 .float-card{flex:1;min-width:0;padding:5px;border:1px solid rgba(255,255,255,.3);border-radius:16px;background:linear-gradient(140deg,rgba(255,255,255,.36),rgba(255,255,255,.07) 30%,rgba(255,255,255,.05) 64%,rgba(255,255,255,.24));box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(255,255,255,.12),0 6px 12px rgba(0,0,0,.35);backdrop-filter:blur(16px);animation:pop .35s var(--ease)}
 .float-root.native .float-card{flex:none;width:372px;height:236px}
 .float-root.collapsed .float-card{visibility:hidden}

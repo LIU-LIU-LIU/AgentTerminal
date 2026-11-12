@@ -29,14 +29,15 @@ test('records authenticated events before strict local decisions; MCP and post h
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeAllConnections(); server.close(); });
   writeFileSync(join(home, 'connection.json'), JSON.stringify({ url: `http://127.0.0.1:${(server.address() as any).port}`, token: 'test-token' }));
-  for (const tool_name of ['Bash', 'shell', 'exec_command']) {
+  for (const tool_name of ['Bash', 'PowerShell', 'powershell', 'pwsh', 'CMD', 'cmd', 'shell', 'exec_command']) {
     const result = await handleHook({ tool_name, hook_event_name: 'PreToolUse' }, { agent: 'codex', mode: 'strict' });
     assert.equal(result.hookSpecificOutput?.permissionDecision, 'deny');
+    assert.match(result.hookSpecificOutput!.permissionDecisionReason, /ToolSearch.*agentterminal/);
   }
   for (const tool_name of ['mcp__agentterminal__run', 'mcp__other__exec_command', 'Read', 'shell_command']) assert.deepEqual(await handleHook({ tool_name, hook_event_name: 'PreToolUse' }, { agent: 'claude', mode: 'strict' }), {});
   assert.deepEqual(await handleHook({ tool_name: 'Bash', hook_event_name: 'PostToolUse' }, { agent: 'claude', mode: 'strict' }), {});
   assert.deepEqual(await handleHook({ tool_name: 'Bash', hook_event_name: 'PreToolUse' }, { agent: 'codex', mode: 'audit' }), {});
-  assert.equal(received.length, 9);
+  assert.equal(received.length, 14);
   assert.equal(received[0].agent, 'codex');
 });
 

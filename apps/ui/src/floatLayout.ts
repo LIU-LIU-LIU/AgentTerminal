@@ -40,7 +40,7 @@ export function resizeAnchored(win: Rect, area: Rect, width: number, dock: Dock 
   return { x: clamp(x, area.x, area.x + area.w - width), y: win.y, w: width, h: win.h };
 }
 
-/** Prefer the oldest running task per agent so short commands cannot hide background work. */
+/** Latest running command takes focus; when it ends, fall back to remaining background work. */
 export function floatCards(tasks: Task[], now: number, lingerMs = 12000, limit = 3): Task[] {
   const latest = new Map<string, Task>();
   const started = (task: Task) => Date.parse(String(task.started_at ?? task.startedAt ?? '')) || 0;
@@ -48,7 +48,7 @@ export function floatCards(tasks: Task[], now: number, lingerMs = 12000, limit =
     const agent = task.agent || 'manual';
     const previous = latest.get(agent);
     if (!previous || (active(task) && !active(previous)) ||
-      (active(task) === active(previous) && (active(task) ? started(task) < started(previous) : started(task) > started(previous)))) latest.set(agent, task);
+      (active(task) === active(previous) && started(task) > started(previous))) latest.set(agent, task);
   }
   const cards = [...latest.values()].filter(task => active(task) || now - Date.parse(String(task.ended_at ?? '')) < lingerMs);
   return cards.sort((a, b) => Number(active(b)) - Number(active(a)) || started(a) - started(b)).slice(0, limit);
