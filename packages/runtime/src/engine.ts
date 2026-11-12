@@ -187,7 +187,8 @@ export class Engine extends EventEmitter {
     if (!row) throw new Error('Task not found');
     return row;
   }
-  list() { return this.db.prepare('SELECT * FROM tasks ORDER BY started_at DESC LIMIT 500').all() as Task[]; }
+  // Keep long-running work visible even after hundreds of newer tasks have finished.
+  list() { return this.db.prepare("SELECT * FROM tasks ORDER BY (status = 'running') DESC, started_at DESC LIMIT 500").all() as Task[]; }
   output(id: string, offset = 0) {
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid offset');
     const task = this.get(id);

@@ -51,6 +51,20 @@ test('text estimates ignore ANSI and distinguish CJK from Latin', () => {
   assert.equal(tokenWeight('你好世界'),4);
 });
 
+test('task list retains old running tasks when recent history exceeds 500', async t => {
+  const engine = new Engine(mkdtempSync(join(tmpdir(), 'agentterminal-list-')));
+  t.after(async () => { await engine.close(); engine.db.close(); });
+  const insert = engine.db.prepare('INSERT INTO tasks (task_id, agent, session, cwd, shell, command, status, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  insert.run('background', 'codex', '', '.', 'gitbash', 'long command', 'running', '2026-01-01T00:00:00Z');
+  engine.db.transaction(() => {
+    for (let i = 0; i < 501; i++) insert.run(`short-${i}`, 'codex', '', '.', 'gitbash', 'echo done', 'ok', '2026-01-01T01:00:00Z');
+  })();
+  const tasks = engine.list();
+  assert.equal(tasks.length, 500);
+  assert.equal(tasks[0].task_id, 'background');
+  assert.equal(tasks.filter(task => task.status === 'running').length, 1);
+});
+
 test('saved shell default executes locally, explicit override wins, usage survives restart', async t => {
   const home=mkdtempSync(join(tmpdir(),'agentterminal-settings-'));
   assert.equal(loadShellSettings(home).default_shell,'gitbash');

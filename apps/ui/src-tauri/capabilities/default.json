@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop",
-  "description": "Single workspace window with monitoring and configuration tabs",
+  "description": "Workspace window with monitoring and configuration tabs; it opens the floating monitor",
   "windows": [
     "main"
   ],
@@ -9,6 +9,8 @@
     "core:default",
     "core:window:allow-show",
     "core:window:allow-set-focus",
-    "core:window:allow-set-always-on-top"
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-theme",
+    "core:webview:allow-create-webview-window"
   ]
 }

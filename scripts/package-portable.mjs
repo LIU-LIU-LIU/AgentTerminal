@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
-const executable=path.join(root,'apps/ui/src-tauri/target/release/agentterminal-ui.exe');
+const target=process.env.CARGO_TARGET_DIR ? path.resolve(root,'apps/ui/src-tauri',process.env.CARGO_TARGET_DIR) : path.join(root,'apps/ui/src-tauri/target');
+const executable=path.join(target,'release/agentterminal-ui.exe');
 if(process.platform!=='win32') throw new Error('Portable packaging currently supports Windows x64 only.');
-const alternative=path.join(root,'apps/ui/src-tauri/target/release/agentterminal-desktop.exe');
+const alternative=path.join(target,'release/agentterminal-desktop.exe');
 const desktop=existsSync(executable)?executable:alternative;
 if(!existsSync(desktop)) throw new Error('Build desktop first: pnpm --dir apps/ui tauri build --no-bundle');
 const destination=path.join(root,'artifacts',`AgentTerminal-${Date.now()}-win-x64`);

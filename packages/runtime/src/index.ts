@@ -9,6 +9,9 @@ import { dataHome } from './client.js';
 import { getConfiguration, previewIntegration, installIntegration, uninstallIntegration, toggleSkill } from '../../installer/src/index.js';
 import { shellConfiguration, saveShellSettings } from './settings.js';
 
+const manifest = [new URL('../../../package.json', import.meta.url), new URL('../../../../package.json', import.meta.url)].find(url => existsSync(url));
+const version: string = manifest ? JSON.parse(readFileSync(manifest, 'utf8')).version : 'unknown';
+
 export async function startRuntime(home = dataHome(), options: { port?: number; token?: string; onStopped?: ()=>void } = {}) {
   mkdirSync(home, { recursive: true, mode: 0o700 });
   const lockPath = path.join(home, 'runtime.lock');
@@ -51,7 +54,7 @@ export async function startRuntime(home = dataHome(), options: { port?: number; 
     try {
       const method = request.method;
       const route = url.pathname;
-      if (route === '/api/health') return send({ ok: true, version: '0.1.0', lifecycle: true, stopping: Boolean(controlling), pid: process.pid });
+      if (route === '/api/health') return send({ ok: true, version, lifecycle: true, stopping: Boolean(controlling), pid: process.pid });
       if (route === '/api/control/stop' && method === 'POST') {
         await body(request);
         if(controlling==='stop')return send({error:'Runtime 正在停止'},409);

@@ -1,0 +1,104 @@
+name: Release Windows portable
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Prepare release version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = $env:GITHUB_REF_NAME
+          } else {
+            $tag = node scripts/prepare-release.mjs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          node scripts/check-release-version.mjs $tag
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node research/pty-smoke.mjs
+      - run: pnpm test
+      - run: pnpm --dir apps/ui test
+      - run: pnpm --dir apps/ui tauri build --no-bundle
+      - run: pnpm package:portable
+      - name: Archive portable application
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $archive = "AgentTerminal-$env:RELEASE_TAG-windows-x64.zip"
+          Compress-Archive -Path artifacts/AgentTerminal-*-win-x64 -DestinationPath $archive
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content -Encoding ascii SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: |
+            AgentTerminal-*-windows-x64.zip
+            SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Commit version and tag after successful build
+        if: github.ref_type != 'tag'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json apps/ui/package.json apps/ui/src-tauri/tauri.conf.json apps/ui/src-tauri/Cargo.toml apps/ui/src-tauri/Cargo.lock
+          if ! git diff --cached --quiet; then git commit -m "chore: release $RELEASE_TAG"; fi
+          git tag "$RELEASE_TAG"
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$RELEASE_TAG"
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-portable
+          path: release-assets
+      - name: Publish release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.package.outputs.tag }}
+        run: |
+          args=(--verify-tag --title "AgentTerminal $RELEASE_TAG" --generate-notes)
+          if [[ "$RELEASE_TAG" == *-* ]]; then args+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" release-assets/* "${args[@]}"

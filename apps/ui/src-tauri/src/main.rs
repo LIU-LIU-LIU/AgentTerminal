@@ -1,7 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
-use std::{env, fs, net::{TcpStream, ToSocketAddrs}, path::PathBuf, process::{Command, Stdio}, sync::Mutex, thread, time::{Duration, Instant}};
+use std::{env, fs, net::{TcpStream, ToSocketAddrs}, path::PathBuf, process::{Command, Stdio}, sync::Mutex, thread, time::{Duration, Instant, SystemTime}};
+use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, Emitter, Manager};
 
 #[derive(Deserialize)]
 struct ConnectionFile { url: String, token: String, #[allow(dead_code)] pid: Option<u32> }
@@ -95,8 +96,82 @@ async fn service_control(action: String, app: tauri::AppHandle) -> Result<(), St
     Ok(())
 }
 
+#[derive(Serialize)]
+struct IdeSettings { ide: String, text: String }
+
+/// Returns the user settings of installed VS Code family editors, most recently used first,
+/// so the UI can follow the terminal theme and font the user already works with.
+#[tauri::command]
+fn ide_settings() -> Vec<IdeSettings> {
+    let mut roots = Vec::new();
+    if let Some(appdata) = env::var_os("APPDATA") { roots.push(PathBuf::from(appdata)); }
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        roots.push(home.join("Library/Application Support"));
+        roots.push(home.join(".config"));
+    }
+    let mut found = Vec::new();
+    for root in &roots {
+        for (ide, folder) in [("VS Code", "Code"), ("Cursor", "Cursor"), ("Windsurf", "Windsurf"), ("VS Code Insiders", "Code - Insiders"), ("VSCodium", "VSCodium"), ("Trae", "Trae")] {
+            let user = root.join(folder).join("User");
+            let Ok(text) = fs::read_to_string(user.join("settings.json")) else { continue };
+            if text.len() > 1_000_000 { continue; }
+            let used = [user.join("globalStorage/state.vscdb"), user.join("settings.json")].iter()
+                .find_map(|path| fs::metadata(path).and_then(|meta| meta.modified()).ok()).unwrap_or(SystemTime::UNIX_EPOCH);
+            found.push((used, IdeSettings { ide: ide.into(), text }));
+        }
+    }
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.into_iter().map(|(_, settings)| settings).collect()
+}
+
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Called by the floating monitor: brings the workspace window forward and shows the task's terminal.
+#[tauri::command]
+fn open_task(id: String, app: tauri::AppHandle) {
+    show_main(&app);
+    let _ = app.emit_to("main", "open-task", id);
+}
+
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) { app.exit(0); }
+
 fn main() {
     tauri::Builder::default().manage(HostState(Mutex::new(())))
-        .invoke_handler(tauri::generate_handler![connection, service_control])
+        .invoke_handler(tauri::generate_handler![connection, service_control, ide_settings, open_task, exit_app])
+        .setup(|app| {
+            let open = MenuItem::with_id(app, "open", "打开主窗口", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "完全退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("main").tooltip("Agent Terminal").menu(&menu).show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open" => show_main(app),
+                    // The workspace window owns the shutdown: it confirms when tasks are running and stops the service.
+                    "quit" => { show_main(app); let _ = app.emit_to("main", "tray-quit", ()); }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event { show_main(tray.app_handle()); }
+                });
+            if let Some(icon) = app.default_window_icon() { tray = tray.icon(icon.clone()); }
+            tray.build(app)?;
+            Ok(())
+        })
+        // Closing the workspace window keeps the app in the tray; the floating monitor stays available.
+        .on_window_event(|window, event| {
+            if window.label() != "main" { return; }
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => { api.prevent_close(); let _ = window.hide(); }
+                tauri::WindowEvent::Destroyed => window.app_handle().exit(0),
+                _ => {}
+            }
+        })
         .run(tauri::generate_context!()).expect("failed to run Agent Terminal");
 }

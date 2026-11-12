@@ -15,7 +15,8 @@ fn main() {
     for y in (0..32i32).rev() {
         for x in 0..32i32 {
             let glyph = (x >= 8 && x <= 15 && (y - 15).abs() == x - 8) || (x >= 17 && x <= 24 && y >= 21 && y <= 22);
-            ico.extend_from_slice(if glyph { &[217, 248, 229, 255] } else { &[61, 77, 33, 255] });
+            let border = x == 3 || x == 28 || y == 3 || y == 28;
+            ico.extend_from_slice(if glyph { &[245, 245, 245, 255] } else if border { &[115, 115, 115, 255] } else { &[29, 29, 29, 255] });
         }
     }
     ico.extend_from_slice(&[0; 128]);
